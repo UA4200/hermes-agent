@@ -5,7 +5,7 @@
 
 ## ENV
 Load: secrets/.env
-Required now: TIKTOK_API_KEY, X_API_KEY, CANVA_API_KEY
+Required now: TIKTOK_API_KEY, X_BEARER_TOKEN, X_API_KEY, X_API_SECRET, CANVA_API_KEY
 Optional (skip if missing): META_ACCESS_TOKEN
 If META_ACCESS_TOKEN missing: write posts to 51dynamics/social/meta-queue.md for manual publish
 
@@ -57,7 +57,7 @@ Platforms: TikTok + X (live) | IG + FB → queue
 
 ## TASK 3 — Schedule Posts
 Use TIKTOK_API_KEY → TikTok auto-publish (live now)
-Use X_API_KEY → X/Twitter auto-publish (live now)
+Use X_BEARER_TOKEN + X_API_KEY + X_API_SECRET → X/Twitter auto-publish (live now)
 If META_ACCESS_TOKEN present → schedule IG + FB via Graph API
 If META_ACCESS_TOKEN missing → write all IG/FB posts to 51dynamics/social/meta-queue.md (owner pastes manually)
 Spacing: Post 1 now, then 1 post every 4 hours
