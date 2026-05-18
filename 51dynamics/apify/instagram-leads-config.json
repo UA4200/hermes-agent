@@ -1,0 +1,42 @@
+{
+  "actor": "apify/instagram-scraper",
+  "description": "Scrape pet influencer accounts with public emails for partnership/affiliate outreach",
+  "input": {
+    "directUrls": [],
+    "searchType": "hashtag",
+    "searchLimit": 200,
+    "hashtags": [
+      "petstore",
+      "petproducts",
+      "dogmom",
+      "catmom",
+      "petsofinstagram",
+      "dogsofinstagram",
+      "catsofinstagram",
+      "petblogger",
+      "petinfluencer",
+      "dogblog"
+    ],
+    "resultsType": "posts",
+    "resultsLimit": 100,
+    "addParentData": true,
+    "scrapePostsUntilDate": "2025-01-01"
+  },
+  "filter_instructions": {
+    "min_followers": 1000,
+    "max_followers": 100000,
+    "target": "micro-influencers with public business emails in bio",
+    "look_for": "email in bio field (e.g. mailto: links or 'DM/email for collabs')"
+  },
+  "outreach_angle": "Free product in exchange for honest review post — no payment needed at start",
+  "expected_output_fields": [
+    "username",
+    "fullName",
+    "biography",
+    "email",
+    "followersCount",
+    "followingCount",
+    "profileUrl",
+    "externalUrl"
+  ]
+}

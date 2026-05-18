@@ -1,0 +1,30 @@
+{
+  "actor": "junglee/amazon-reviews-scraper",
+  "description": "Scrape 1-2 star reviews on competitor pet products to extract pain points for email copy",
+  "input": {
+    "productUrls": [
+      { "url": "https://www.amazon.com/s?k=dog+cooling+mat&rh=p_72%3A2661618011", "label": "dog_cooling_mat" },
+      { "url": "https://www.amazon.com/s?k=cat+water+fountain&rh=p_72%3A2661618011", "label": "cat_fountain" },
+      { "url": "https://www.amazon.com/s?k=dog+puzzle+feeder&rh=p_72%3A2661618011", "label": "puzzle_feeder" },
+      { "url": "https://www.amazon.com/s?k=pet+grooming+kit&rh=p_72%3A2661618011", "label": "grooming_kit" },
+      { "url": "https://www.amazon.com/s?k=dog+lick+mat&rh=p_72%3A2661618011", "label": "lick_mat" },
+      { "url": "https://www.amazon.com/s?k=dog+anxiety+vest&rh=p_72%3A2661618011", "label": "anxiety_vest" },
+      { "url": "https://www.amazon.com/s?k=biodegradable+dog+poop+bags", "label": "poop_bags" }
+    ],
+    "maxReviews": 50,
+    "filterByRating": ["one_star", "two_star"],
+    "sort": "recent",
+    "includeReviewerInfo": false
+  },
+  "pain_point_categories": [
+    "broke quickly / poor quality",
+    "wrong size",
+    "didn't work as described",
+    "bad smell / material",
+    "difficult to clean",
+    "pet refused to use it",
+    "shipping damage",
+    "misleading photos"
+  ],
+  "usage": "Feed extracted complaints into email copy. Example: if 40% of cooling mat reviews say 'broke in a week', your subject line becomes: 'A dog cooling mat that actually lasts'"
+}
