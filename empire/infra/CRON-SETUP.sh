@@ -48,7 +48,7 @@ crontab -l > /tmp/crontab_backup_$(date +%Y%m%d).txt 2>/dev/null
 0 0 * * 0 openclaw run MemoryCompressor
 
 # Nightly backup — 2 AM daily
-0 2 * * * cp ~/.openclaw/config/soul.md ~/.openclaw/memory/archive/soul_$(date +%Y%m%d).md && cp ~/.openclaw/config/brain.md ~/.openclaw/memory/archive/brain_$(date +%Y%m%d).md
+0 2 * * * cp ~/.openclaw/config/soul.md ~/.openclaw/memory/archive/soul_$(date +\%Y\%m\%d).md && cp ~/.openclaw/config/brain.md ~/.openclaw/memory/archive/brain_$(date +\%Y\%m\%d).md
 
 # 51-Dynamics store check — 9 AM daily
 0 9 * * * openclaw run Monitor_51Dynamics --task daily_digest
