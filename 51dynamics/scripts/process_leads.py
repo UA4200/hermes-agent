@@ -19,12 +19,18 @@ def process_google_maps(data: list[dict]) -> list[dict]:
     leads = []
     for place in data:
         rating = place.get("totalScore") or place.get("rating", 0)
-        if not rating or float(rating) > 3.5:
+        try:
+            rating_val = float(rating) if rating is not None else 0.0
+        except (ValueError, TypeError):
+            rating_val = 0.0
+        if rating_val == 0.0 or rating_val > 3.5:
             continue
 
         emails = place.get("emails") or []
+        if isinstance(emails, str):
+            emails = [emails]
         if not emails:
-            website = place.get("website", "")
+            website = place.get("website") or ""
             emails = extract_emails_from_text(website)
 
         if not emails:
@@ -33,15 +39,21 @@ def process_google_maps(data: list[dict]) -> list[dict]:
         top_complaints = []
         reviews = place.get("reviews") or []
         for review in reviews:
-            if review.get("stars", 5) <= 2:
-                top_complaints.append(review.get("text", "")[:120])
+            if isinstance(review, dict):
+                try:
+                    stars = float(review.get("stars", 5))
+                except (ValueError, TypeError):
+                    stars = 5.0
+                if stars <= 2:
+                    text = review.get("text") or ""
+                    top_complaints.append(text[:120])
 
         leads.append({
             "name": place.get("title", ""),
             "email": emails[0],
             "phone": place.get("phone", ""),
-            "website": place.get("website", ""),
-            "rating": rating,
+            "website": place.get("website") or "",
+            "rating": rating_val,
             "review_count": place.get("reviewsCount", 0),
             "address": place.get("address", ""),
             "top_complaint": top_complaints[0] if top_complaints else "",
@@ -77,16 +89,19 @@ def process_amazon_reviews(data: list[dict]) -> list[dict]:
 def process_instagram(data: list[dict]) -> list[dict]:
     leads = []
     for account in data:
-        bio = account.get("biography", "")
+        bio = account.get("biography") or ""
         emails = extract_emails_from_text(bio)
-        external_url = account.get("externalUrl", "")
+        external_url = account.get("externalUrl") or ""
         if not emails and external_url:
             emails = extract_emails_from_text(external_url)
 
         if not emails:
             continue
 
-        followers = account.get("followersCount", 0)
+        try:
+            followers = int(account.get("followersCount") or 0)
+        except (ValueError, TypeError):
+            followers = 0
         if followers < 1000:
             continue
 
