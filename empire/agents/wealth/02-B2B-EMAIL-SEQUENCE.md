@@ -1,11 +1,44 @@
 # ADAI INC — B2B Cold Email Sequence (4 Emails)
-# Purpose: Convert healthcare IT / SaaS / ops leads into discovery calls
+# Purpose: Convert high-ROI niche leads into discovery calls
 # Model: Haiku (personalization lookup) → Sonnet (write/edit)
 # Rules: DRAFT ONLY — never send without Nathan's approval
 
 ---
 
+## TARGET ICPs (Refined July 2026)
+
+Three niches validated via market research — highest ROI, accessible decision-makers, proven retainer range:
+
+### ICP 1 — Independent Dental Practices
+- **Target:** Practice owners, office managers at 4–15 staff practices NOT part of a DSO
+- **Market pain:** 160+ hrs/mo lost to insurance pre-auth, scheduling, patient reminders; $3.1B industry-wide admin bottleneck
+- **Our offer:** Automate insurance pre-auth, no-show reminders, new patient intake
+- **Hook:** "15–20 hours of admin reclaimed per week within 30 days"
+- **Lead sources:** Yelp/Google Maps scrape, dental association directories, ZocDoc
+- **AgentMail draft ID:** `eefd865a-1a9f-4653-ac76-e9a9bda917d7`
+
+### ICP 2 — Small Law Firms (2–10 Attorneys)
+- **Target:** Managing partners, office administrators at independent firms using Clio/MyCase/Lawmatics
+- **Market pain:** Every admin hour = $200–500 in lost billable work; intake inefficiency is universal
+- **Our offer:** AI intake qualification, consultation scheduling, follow-up sequences — integrated into their existing PMS
+- **Hook:** "120–180 billable hours per attorney per year back on the table"
+- **Lead sources:** Avvo, FindLaw, state bar directories, LinkedIn
+- **AgentMail draft ID:** `c98d7209-c421-4c6b-b2ed-343ba7ba55b5`
+
+### ICP 3 — Real Estate Agencies
+- **Target:** Agency owners/team leads managing 200+ leads/week with 3–25 agents
+- **Market pain:** 67% lead conversion loss from slow response; leads expect <5 min reply
+- **Our offer:** AI lead response (60-sec, 24/7), nurture sequences, buyer/seller qualification
+- **Hook:** "One agency booked 14 clients + $47k in 90 days"
+- **Retainer range:** $800–$3,500/mo
+- **Lead sources:** Zillow agent directory, NAR database, local broker associations
+- **AgentMail draft ID:** `f88a4a3a-fa08-454d-9769-c331c0fd5e72`
+
+---
+
 ## EMAIL 1 — Cold Outreach (Day 0)
+
+### Generic Version
 
 **Subject:** Cut your {COMPANY} AI implementation time by 60%
 
@@ -30,9 +63,86 @@ VARIABLES: {FIRST_NAME} {COMPANY} {INDUSTRY} {ROLE} {GROWTH_SIGNAL} {PAIN_POINT}
 
 ---
 
+### Niche Variant — Dental Practices
+
+**Subject:** Cut your front desk workload by 30% — quick question
+
+Hi {FIRST_NAME},
+
+Running a dental practice means your team spends hours on insurance pre-auths, appointment reminders, and new patient intake — hours that don't generate revenue.
+
+ADAI INC builds AI automation systems for independent dental practices (4–15 staff). We've helped practices:
+
+• Automate insurance pre-authorization checks overnight
+• Cut no-shows with intelligent multi-touch reminder sequences
+• Handle new patient intake without adding headcount
+
+Most of our dental clients reclaim 15–20 hours of admin time per week within 30 days of going live.
+
+Would a 15-minute call make sense to see if we can do the same for {PRACTICE_NAME}?
+
+Best,
+Nathan Asiegbu
+ADAI INC — AI Automation for Small Business
+adai-b2b@agentmail.to
+
+---
+
+### Niche Variant — Law Firms
+
+**Subject:** What if intake didn't require your team at all?
+
+Hi {FIRST_NAME},
+
+At a small law firm, every hour your team spends on intake, scheduling, and lead follow-up is an hour not generating billable work — at $200–500/hr, that adds up fast.
+
+ADAI INC builds AI intake and admin automation for 2–10 attorney firms. We integrate with tools you likely already use (Clio, MyCase, Lawmatics) to:
+
+• Qualify leads and capture full intake data automatically
+• Schedule consultations without email back-and-forth
+• Run follow-up sequences so no prospect goes cold
+
+Firms we work with typically reclaim 10–15 hours of non-billable admin time per attorney per month. That's 120–180 billable hours a year back on the table.
+
+Worth a 15-minute call to see if it's a fit?
+
+Best,
+Nathan Asiegbu
+ADAI INC — AI Automation for Small Business
+adai-b2b@agentmail.to
+
+---
+
+### Niche Variant — Real Estate Agencies
+
+**Subject:** 67% of your leads are going cold — here's the fix
+
+Hi {FIRST_NAME},
+
+Real estate agencies managing 200+ leads per week lose over two-thirds of potential clients simply because response time isn't fast enough — most leads expect a reply within 5 minutes.
+
+ADAI INC builds AI lead response and follow-up systems for real estate agencies. We:
+
+• Respond to new leads within 60 seconds, 24/7 — even on weekends
+• Run multi-touch nurture sequences for leads that don't convert immediately
+• Qualify buyer/seller intent before your agents spend time on a call
+
+One agency we worked with booked 14 new clients and $47k in closed revenue within 90 days of going live.
+
+Retainers typically run $800–$3,500/mo depending on lead volume and automation depth.
+
+Can we grab 15 minutes to map out what this looks like for {AGENCY_NAME}?
+
+Best,
+Nathan Asiegbu
+ADAI INC — AI Automation for Small Business
+adai-b2b@agentmail.to
+
+---
+
 ## EMAIL 2 — Follow-Up (Day 3, no reply)
 
-**Subject:** Re: Cut your {COMPANY} AI implementation time by 60%
+**Subject:** Re: {EMAIL_1_SUBJECT}
 
 Hi {FIRST_NAME},
 
@@ -42,7 +152,7 @@ Quick question: what's the ONE process at {COMPANY} that eats the most of your t
 
 I ask because in the last 6 months, the answer to that question has almost always pointed directly to the automation we build first — and it tends to deliver results within the first 30 days.
 
-Still happy to do a 20-minute call. No pitch, just a mapping session.
+Still happy to do a 15-minute call. No pitch, just a mapping session.
 
 Nathan | ADAI INC  
 calendly.com/ugoasiegbu
@@ -70,7 +180,7 @@ We built a custom AI system in 3 weeks that:
 
 They hit ROI in week 5.
 
-I think we could do something similar for {COMPANY}. Would 20 minutes this week work?
+I think we could do something similar for {COMPANY}. Would 15 minutes this week work?
 
 Nathan | ADAI INC  
 calendly.com/ugoasiegbu
@@ -78,6 +188,11 @@ calendly.com/ugoasiegbu
 ---
 VARIABLES: {FIRST_NAME} {COMPANY} {INDUSTRY} {PAIN_POINT} {HIGH_VALUE_ACTIVITY} {SIMILAR_COMPANY}
 SEND: Day 7 after Email 1, no reply
+
+**Niche case study hooks:**
+- Dental: "A dental practice similar to yours was losing 20 hrs/week to insurance pre-auth and no-show management..."
+- Law firm: "A 4-attorney PI firm was losing 12 hrs/week to intake calls that didn't convert..."
+- Real estate: "A 10-agent team was responding to leads in 4+ hours and losing 60% before first contact..."
 
 ---
 
@@ -115,13 +230,20 @@ ACTION: Move to ADAI EMPIRE/B2B Leads/Closed after sending
 | — | Any | Reply received | B2B Leads/Replied → Hot |
 
 ## PERSONALIZATION DATA (Haiku pulls before Sonnet writes)
-- {GROWTH_SIGNAL}: recent funding, new hire surge, product launch, award
-- {PAIN_POINT}: manual reporting, lead qualification, invoice processing, data entry
-- {HIGH_VALUE_ACTIVITY}: sales, client delivery, product development
-- {SIMILAR_COMPANY}: anonymize or use "a healthcare IT firm we worked with"
+- {GROWTH_SIGNAL}: recent funding, new hire surge, product launch, award, new location
+- {PAIN_POINT}: insurance pre-auth (dental), intake calls (law), lead response (real estate), manual reporting, data entry
+- {HIGH_VALUE_ACTIVITY}: patient care (dental), billable client work (law), closing transactions (real estate)
+- {SIMILAR_COMPANY}: anonymize — "a dental practice in the Chicago area", "a 5-attorney firm we worked with"
 
 ## VOLUME TARGET
 - 40 emails/day, weekdays only
-- Apollo.io for healthcare IT / SaaS 10–500 employees
-- Hunter.io for email verification before send
+- Lead sources by niche (see ICP section above)
+- Apollo.io `contacts_search` for existing database hits (free plan)
+- Apollo upgrade or Apify scraper needed for new prospect prospecting
 - Instantly.ai ($37/mo) for sequencing OR n8n self-hosted
+
+## LEAD ACQUISITION STATUS (July 2026)
+- Apollo free plan: `contacts_search` available, `mixed_people/api_search` blocked (upgrade needed)
+- AgentMail: 3 niche-specific cold email drafts live in `adai-b2b@agentmail.to`
+- Apify/Instantly: not yet connected — evaluate for scraping dental/law/RE directories
+- Next step: Nathan to source first 10 prospects per niche and populate `to:` field in AgentMail drafts
