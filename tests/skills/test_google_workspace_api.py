@@ -234,3 +234,161 @@ def test_api_get_credentials_refresh_persists_authorized_user_type(api_module, m
     assert isinstance(creds, FakeCredentials)
     assert saved["token"] == "ya29.refreshed"
     assert saved["type"] == "authorized_user"
+
+
+# ---------------------------------------------------------------------------
+# calendar summarize
+# ---------------------------------------------------------------------------
+
+def _fake_gws_events(events_json):
+    """Return a subprocess.run mock that yields a gws calendar events list."""
+    def _run(cmd, **kwargs):
+        return MagicMock(returncode=0, stdout=json.dumps({"items": events_json}), stderr="")
+    return _run
+
+
+SAMPLE_EVENTS = [
+    {
+        "id": "evt1",
+        "summary": "Daily Approval Window",
+        "start": {"dateTime": "2026-07-21T09:00:00-05:00"},
+        "end": {"dateTime": "2026-07-21T09:30:00-05:00"},
+        "location": "",
+        "description": "",
+        "status": "confirmed",
+        "htmlLink": "https://calendar.google.com/event?eid=evt1",
+    },
+    {
+        "id": "evt2",
+        "summary": "Evening Review",
+        "start": {"dateTime": "2026-07-21T21:00:00-05:00"},
+        "end": {"dateTime": "2026-07-21T21:20:00-05:00"},
+        "location": "",
+        "description": "",
+        "status": "confirmed",
+        "htmlLink": "https://calendar.google.com/event?eid=evt2",
+    },
+    {
+        "id": "evt3",
+        "summary": "Weekly Strategy Review",
+        "start": {"dateTime": "2026-07-26T10:00:00-05:00"},
+        "end": {"dateTime": "2026-07-26T11:00:00-05:00"},
+        "location": "Home Office",
+        "description": "Review empire metrics and plan next week.",
+        "status": "confirmed",
+        "htmlLink": "https://calendar.google.com/event?eid=evt3",
+    },
+]
+
+
+def test_calendar_summarize_json_groups_by_day(api_module, capsys):
+    """summarize --format json groups events into day buckets."""
+    args = api_module.argparse.Namespace(
+        week=False, days=7, calendar="primary", format="json",
+        func=api_module.calendar_summarize,
+    )
+
+    with patch.object(api_module.subprocess, "run", side_effect=_fake_gws_events(SAMPLE_EVENTS)):
+        api_module.calendar_summarize(args)
+
+    out = json.loads(capsys.readouterr().out)
+    assert out["total_events"] == 3
+    assert len(out["days"]) == 2
+
+    # Day 1: two events on 2026-07-21
+    day1 = out["days"][0]
+    assert day1["date"] == "2026-07-21"
+    assert len(day1["events"]) == 2
+    assert day1["events"][0]["summary"] == "Daily Approval Window"
+    assert day1["events"][0]["time"] == "09:00"
+    assert day1["events"][0]["end"] == "09:30"
+
+    # Day 2: one event on 2026-07-26
+    day2 = out["days"][1]
+    assert day2["date"] == "2026-07-26"
+    assert day2["events"][0]["location"] == "Home Office"
+
+
+def test_calendar_summarize_markdown_output(api_module, capsys):
+    """summarize --format markdown produces human-readable text."""
+    args = api_module.argparse.Namespace(
+        week=False, days=7, calendar="primary", format="markdown",
+        func=api_module.calendar_summarize,
+    )
+
+    with patch.object(api_module.subprocess, "run", side_effect=_fake_gws_events(SAMPLE_EVENTS)):
+        api_module.calendar_summarize(args)
+
+    out = capsys.readouterr().out
+    assert "## Calendar" in out
+    assert "Daily Approval Window" in out
+    assert "Weekly Strategy Review" in out
+    assert "09:00" in out
+    assert "Home Office" in out
+    assert "3 events" in out
+
+
+def test_calendar_summarize_empty_calendar(api_module, capsys):
+    """summarize with no events returns zero totals and no day buckets."""
+    args = api_module.argparse.Namespace(
+        week=False, days=7, calendar="primary", format="json",
+        func=api_module.calendar_summarize,
+    )
+
+    with patch.object(api_module.subprocess, "run", side_effect=_fake_gws_events([])):
+        api_module.calendar_summarize(args)
+
+    out = json.loads(capsys.readouterr().out)
+    assert out["total_events"] == 0
+    assert out["days"] == []
+
+
+def test_calendar_summarize_week_flag_targets_next_monday(api_module, capsys, monkeypatch):
+    """--week mode requests next Mon–Sun, not today+7."""
+    captured_params = {}
+
+    def capture_run(cmd, **kwargs):
+        if "--params" in cmd:
+            captured_params.update(json.loads(cmd[cmd.index("--params") + 1]))
+        return MagicMock(returncode=0, stdout=json.dumps({"items": []}), stderr="")
+
+    args = api_module.argparse.Namespace(
+        week=True, days=7, calendar="primary", format="json",
+        func=api_module.calendar_summarize,
+    )
+
+    with patch.object(api_module.subprocess, "run", side_effect=capture_run):
+        api_module.calendar_summarize(args)
+
+    # timeMin should be on a Monday (weekday == 0)
+    time_min = captured_params.get("timeMin", "")
+    assert time_min, "timeMin not captured"
+    dt = datetime.fromisoformat(time_min)
+    assert dt.weekday() == 0, f"Expected Monday (0), got weekday {dt.weekday()} for {time_min}"
+
+
+def test_calendar_summarize_all_day_event(api_module, capsys):
+    """All-day events (date-only, no T) are handled without crash."""
+    all_day = [
+        {
+            "id": "allday1",
+            "summary": "Company Holiday",
+            "start": {"date": "2026-07-24"},
+            "end": {"date": "2026-07-25"},
+            "location": "",
+            "description": "",
+            "status": "confirmed",
+            "htmlLink": "",
+        }
+    ]
+    args = api_module.argparse.Namespace(
+        week=False, days=7, calendar="primary", format="json",
+        func=api_module.calendar_summarize,
+    )
+
+    with patch.object(api_module.subprocess, "run", side_effect=_fake_gws_events(all_day)):
+        api_module.calendar_summarize(args)
+
+    out = json.loads(capsys.readouterr().out)
+    assert out["total_events"] == 1
+    assert out["days"][0]["events"][0]["time"] == "all-day"
