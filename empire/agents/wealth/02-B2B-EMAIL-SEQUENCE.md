@@ -247,3 +247,50 @@ ACTION: Move to ADAI EMPIRE/B2B Leads/Closed after sending
 - AgentMail: 3 niche-specific cold email drafts live in `adai-b2b@agentmail.to`
 - Apify/Instantly: not yet connected — evaluate for scraping dental/law/RE directories
 - Next step: Nathan to source first 10 prospects per niche and populate `to:` field in AgentMail drafts
+
+## FULL SOURCING TOOL STACK
+
+See skill: `skills/productivity/b2b-sourcing/SKILL.md` — Alusi's complete sourcing playbook.
+Script: `skills/productivity/b2b-sourcing/scripts/source_leads.py` — runnable pipeline.
+
+### Tools Available Now (Alusi can use these today)
+
+| Tool | MCP / Built-in | Sourcing Use |
+|------|---------------|--------------|
+| WebSearch | Built-in | Discover businesses, verify sites, find DMs |
+| Tavily | `mcp__Tavily__*` | Deep research, crawl directories, extract contact info |
+| Apollo.io | `mcp__Apollo_io__*` | Company/people search, enrich by domain |
+| ZipRecruiter | `mcp__e48d58b6__search_jobs` | Find companies hiring admin roles = growth signal |
+| Indeed | `mcp__Indeed__*` | Same as ZipRecruiter — hiring = admin pain |
+| Notion | `mcp__Notion__*` | CRM: store leads, track pipeline status |
+| AgentMail | `mcp__AgentMail__*` | Draft personalized outreach (DRAFT ONLY) |
+| Gmail | `mcp__Gmail__*` | Send approved outreach, label/track replies |
+| Google Calendar | `mcp__Google_Calendar__*` | Book discovery calls |
+| Twilio | `mcp__Twilio__*` | SMS follow-up (Day 5, never first touch) |
+| Canva | `mcp__Canva__*` | Generate case study PDFs per niche |
+| Google Drive | `mcp__Google_Drive__*` | Store lead lists and research files |
+
+### Tools Nathan Needs to Add
+
+| Tool | Cost | Priority | What It Unlocks |
+|------|------|----------|----------------|
+| **Brave Search MCP** | Free (2k/mo) | HIGH | Better business lookups than standard search |
+| **Firecrawl MCP** | Free 500 credits | HIGH | Scrape Yelp/Avvo/Zillow for contact data |
+| **Hunter.io API** | Free 25/mo | HIGH | Find + verify professional emails |
+| **Apollo Paid Plan** | $49/mo | MEDIUM | Unlock bulk people search (265M+ contacts) |
+| **Instantly.ai** | $37/mo | MEDIUM | Email sequencing + inbox rotation at 40/day |
+| **Apify** | $5 free credit | LOW | Scalable directory scraping at volume |
+
+### Setup Instructions (run in interactive Claude Code session)
+```bash
+# Brave Search
+claude mcp add brave-search npx @modelcontextprotocol/server-brave-search
+# Then add BRAVE_API_KEY to Alusi's secrets (get at api.search.brave.com)
+
+# Firecrawl
+claude mcp add firecrawl npx firecrawl-mcp
+# Then add FIRECRAWL_API_KEY to Alusi's secrets (get at firecrawl.dev)
+
+# Hunter.io — no MCP needed, script uses API directly
+# Add HUNTER_API_KEY to ~/.hermes/.env
+```
