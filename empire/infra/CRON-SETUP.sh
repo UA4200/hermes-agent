@@ -1,24 +1,38 @@
 #!/bin/bash
 # CRON SETUP — Schedules all empire automations
-# Run once on Mac Mini
+# Safe to rerun: removes previous block then reinstalls (idempotent).
+# APPROVAL POLICY: Tasks that send emails, post content, or mutate external
+# state require Nathan's explicit GO in the approval queue first.
+# Cron tasks here only DRAFT, QUEUE, or DIAGNOSE — never send/post/fix autonomously.
 
-echo "⏰ Installing empire cron jobs..."
+set -euo pipefail
 
-# Backup existing crontab
-crontab -l > /tmp/crontab_backup_$(date +%Y%m%d).txt 2>/dev/null
+MARKER_START="# ===== ADAI-EMPIRE-CRON-START ====="
+MARKER_END="# ===== ADAI-EMPIRE-CRON-END ====="
 
-# Add empire cron jobs
-(crontab -l 2>/dev/null; cat << 'EOF'
+echo "⏰ Installing empire cron jobs (idempotent)..."
 
-# ============================================
-# ADAI EMPIRE — AUTOMATED SCHEDULE
-# ============================================
+# Snapshot current crontab before any changes
+BACKUP_FILE="/tmp/crontab_backup_$(date +%Y%m%d_%H%M%S).txt"
+crontab -l > "$BACKUP_FILE" 2>/dev/null || true
+echo "  Backup saved: $BACKUP_FILE"
+
+# Strip any previous ADAI Empire block, then append the new one
+EXISTING=$(crontab -l 2>/dev/null || true)
+STRIPPED=$(echo "$EXISTING" | awk "/$MARKER_START/{found=1} !found{print} /$MARKER_END/{found=0}")
+
+(echo "$STRIPPED"; cat << EOF
+
+$MARKER_START
+# ADAI EMPIRE — AUTOMATED SCHEDULE (reinstall via CRON-SETUP.sh)
+# All tasks are DRAFT/QUEUE/DIAGNOSTIC only.
+# Sending, posting, or external mutations require approval-queue GO.
 
 # Morning brief — 7:00 AM daily
 0 7 * * * openclaw run SovereignProxy --task morning_briefing
 
-# System doctor + security scan — 5:00 AM daily
-0 5 * * * openclaw doctor --fix && clawhub scan --security
+# System diagnostic (read-only, no --fix) — 5:00 AM daily
+0 5 * * * openclaw doctor --check && clawhub scan --security
 
 # Outcome collector — 6:00 AM daily
 0 6 * * * openclaw run OutcomeCollector
@@ -29,17 +43,17 @@ crontab -l > /tmp/crontab_backup_$(date +%Y%m%d).txt 2>/dev/null
 # BLCO signal scan — 9 AM and 2 PM weekdays
 0 9,14 * * 1-5 openclaw run BLCO_Broker --task scan_signals
 
-# B2B outreach batch — 10 AM weekdays
-0 10 * * 1-5 openclaw run B2B_Outreach --task send_batch --limit 40
+# B2B outreach batch — 10 AM weekdays (DRAFT ONLY, awaits approval-queue GO)
+0 10 * * 1-5 openclaw run B2B_Outreach --task draft_batch --limit 40
 
-# SEO content generation — 11 AM daily
+# SEO content generation — 11 AM daily (drafts to review queue)
 0 11 * * * openclaw run SEO_Content --task generate_article
 
-# Trading sentinel — every 30 min during market hours (Mon-Fri 9:30-16:00 ET = 8:30-15:00 CT)
+# Trading sentinel (read-only signal check, no orders placed) — every 30 min market hours CT
 */30 8-15 * * 1-5 openclaw run Trading_Sentinel --task check_signals
 
-# Social media scheduler — 8 AM and 6 PM daily
-0 8,18 * * * openclaw run Social_Poster --task post_scheduled
+# Social media scheduler — 8 AM and 6 PM daily (QUEUE ONLY, awaits approval-queue GO)
+0 8,18 * * * openclaw run Social_Poster --task queue_posts
 
 # Weekly pattern analysis — Sunday 11 PM
 0 23 * * 0 openclaw run PatternAnalyzer --weekly
@@ -48,16 +62,19 @@ crontab -l > /tmp/crontab_backup_$(date +%Y%m%d).txt 2>/dev/null
 0 0 * * 0 openclaw run MemoryCompressor
 
 # Nightly backup — 2 AM daily
-0 2 * * * cp ~/.openclaw/config/soul.md ~/.openclaw/memory/archive/soul_$(date +\%Y\%m\%d).md && cp ~/.openclaw/config/brain.md ~/.openclaw/memory/archive/brain_$(date +\%Y\%m\%d).md
+0 2 * * * cp ~/.openclaw/config/soul.md ~/.openclaw/memory/archive/soul_\$(date +\%Y\%m\%d).md && cp ~/.openclaw/config/brain.md ~/.openclaw/memory/archive/brain_\$(date +\%Y\%m\%d).md
 
 # 51-Dynamics store check — 9 AM daily
 0 9 * * * openclaw run Monitor_51Dynamics --task daily_digest
 
+$MARKER_END
 EOF
 ) | crontab -
 
-echo "✅ Cron jobs installed"
-crontab -l | grep openclaw | wc -l
-echo "   jobs scheduled"
+INSTALLED=$(crontab -l 2>/dev/null | grep -c "openclaw" || true)
+echo "✅ Cron jobs installed ($INSTALLED openclaw tasks scheduled)"
+echo "   Backup at: $BACKUP_FILE"
+echo "   Re-run at any time — previous block is replaced, not duplicated."
 echo ""
-echo "🚀 Schedule active. Empire runs automatically."
+echo "🔒 Approval policy: B2B_Outreach=draft_batch, Social_Poster=queue_posts,"
+echo "   doctor=--check only. No autonomous sending or external mutation."
