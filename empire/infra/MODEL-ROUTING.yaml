@@ -1,0 +1,61 @@
+# MODEL ROUTING — 85/15 RULE
+# This cuts API costs by ~97%. Always start cheap, escalate only if needed.
+
+models:
+  default: "claude-sonnet-4-6"
+
+  routing:
+    haiku:
+      model: "claude-haiku-4-5-20251001"
+      usage_target: "85%"
+      use_for:
+        - web scraping
+        - data collection
+        - file operations
+        - routine checks
+        - heartbeat pings
+        - email triage (classify only)
+        - lead list filtering
+        - log parsing
+
+    sonnet:
+      model: "claude-sonnet-4-6"
+      usage_target: "10%"
+      use_for:
+        - content creation
+        - email drafting
+        - code generation
+        - analysis and research
+        - product descriptions
+        - social media posts
+
+    opus:
+      model: "claude-opus-4-8"
+      usage_target: "5%"
+      use_for:
+        - strategic decisions
+        - security audits
+        - complex reasoning
+        - BLCO deal structuring
+        - contract review
+
+  escalation:
+    enabled: true
+    on_failure: "next_tier"
+    max_retries: 3
+
+cost_controls:
+  daily_limit_usd: 10
+  monthly_limit_usd: 200
+  alert_at_percent: 80
+  halt_at_percent: 100
+  notify_via: telegram
+
+security:
+  draft_only_mode: true
+  require_approval_for:
+    - send_email
+    - send_message
+    - make_purchase
+    - delete_files
+    - external_api_calls

@@ -211,6 +211,42 @@ $GAPI calendar create --summary "Review" --start 2026-03-01T14:00:00Z --end 2026
 
 # Delete event
 $GAPI calendar delete EVENT_ID
+
+# Summarize upcoming week (grouped by day)
+$GAPI calendar summarize                         # next 7 days, JSON output
+$GAPI calendar summarize --format markdown       # human-readable for briefs/Telegram
+$GAPI calendar summarize --week                  # next Mon–Sun calendar week
+$GAPI calendar summarize --days 14 --format markdown  # two-week lookahead
+```
+
+**Summarize JSON output schema:**
+```json
+{
+  "window": {"start": "...", "end": "..."},
+  "total_events": 5,
+  "days": [
+    {
+      "date": "2026-07-21",
+      "events": [
+        {"time": "09:00", "end": "09:30", "summary": "Standup", "location": "", "description": "", "id": "...", "htmlLink": "..."}
+      ]
+    }
+  ]
+}
+```
+
+**Summarize markdown output** (paste directly into morning brief or Telegram):
+```
+## Calendar — Jul 21 to Jul 28, 2026
+
+**Monday, Jul 21**
+  • 09:00–09:30  Daily Approval Window
+  • 21:00–21:20  Evening Review
+
+**Sunday, Jul 27**
+  • 10:00–11:00  Weekly Strategy Review
+
+_3 events across 2 days_
 ```
 
 ### Drive
