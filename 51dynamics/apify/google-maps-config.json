@@ -1,0 +1,51 @@
+{
+  "actor": "compass/crawler-google-places",
+  "description": "Scrape pet stores from Google Maps — targets low-rated stores as warm B2B leads",
+  "input": {
+    "searchStringsArray": [
+      "pet store",
+      "pet shop",
+      "pet supply store",
+      "dog grooming",
+      "pet accessories store"
+    ],
+    "locationQuery": "United States",
+    "maxCrawledPlacesPerSearch": 100,
+    "language": "en",
+    "maxReviews": 20,
+    "reviewsSort": "newest",
+    "additionalInfo": true,
+    "maxImages": 0,
+    "exportPlaceUrls": true,
+    "includeWebResults": false
+  },
+  "filter_instructions": {
+    "target_rating": "below 3.5 stars",
+    "required_fields": ["title", "totalScore", "reviewsCount", "address", "phone", "website", "emails"],
+    "notes": "Low-rated stores = owners frustrated with current suppliers. High opportunity for wholesale pitch."
+  },
+  "target_cities": [
+    "New York, NY",
+    "Los Angeles, CA",
+    "Houston, TX",
+    "Chicago, IL",
+    "Phoenix, AZ",
+    "Philadelphia, PA",
+    "San Antonio, TX",
+    "Dallas, TX",
+    "Atlanta, GA",
+    "Miami, FL"
+  ],
+  "expected_output_fields": [
+    "name",
+    "rating",
+    "reviewCount",
+    "address",
+    "city",
+    "phone",
+    "website",
+    "email",
+    "googleMapsUrl",
+    "topComplaints"
+  ]
+}

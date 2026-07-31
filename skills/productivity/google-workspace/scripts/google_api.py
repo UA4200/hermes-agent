@@ -12,6 +12,7 @@ Usage:
   python google_api.py gmail reply MESSAGE_ID --body "Thanks"
   python google_api.py calendar list [--from DATE] [--to DATE] [--calendar primary]
   python google_api.py calendar create --summary "Meeting" --start DATETIME --end DATETIME
+  python google_api.py calendar summarize [--week] [--days 7] [--format json|markdown]
   python google_api.py drive search "budget report" [--max 10]
   python google_api.py contacts list [--max 20]
   python google_api.py sheets get SHEET_ID RANGE
@@ -560,6 +561,130 @@ def calendar_delete(args):
     print(json.dumps({"status": "deleted", "eventId": args.event_id}))
 
 
+def calendar_summarize(args):
+    """Fetch events for the coming week and output a grouped summary.
+
+    Output modes:
+      json     — machine-readable array of day buckets (default)
+      markdown — human-readable table suitable for morning briefs / Telegram
+    """
+    now = datetime.now(timezone.utc)
+
+    # Determine window: --days N from now, or --week (next Mon–Sun)
+    if args.week:
+        days_until_monday = (7 - now.weekday()) % 7 or 7
+        week_start = (now + timedelta(days=days_until_monday)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        week_end = week_start + timedelta(days=7)
+    else:
+        week_start = now
+        week_end = now + timedelta(days=args.days)
+
+    time_min = week_start.isoformat()
+    time_max = week_end.isoformat()
+
+    # Fetch events
+    if _gws_binary():
+        results = _run_gws(
+            ["calendar", "events", "list"],
+            params={
+                "calendarId": args.calendar,
+                "timeMin": time_min,
+                "timeMax": time_max,
+                "maxResults": 100,
+                "singleEvents": True,
+                "orderBy": "startTime",
+            },
+        )
+        raw_events = results.get("items", [])
+    else:
+        service = build_service("calendar", "v3")
+        results = service.events().list(
+            calendarId=args.calendar,
+            timeMin=time_min,
+            timeMax=time_max,
+            maxResults=100,
+            singleEvents=True,
+            orderBy="startTime",
+        ).execute()
+        raw_events = results.get("items", [])
+
+    # Group events by calendar date (in local wall time for display)
+    day_buckets: dict = {}
+    for e in raw_events:
+        start_raw = e.get("start", {}).get("dateTime") or e.get("start", {}).get("date", "")
+        end_raw = e.get("end", {}).get("dateTime") or e.get("end", {}).get("date", "")
+
+        # Parse start to get local date label
+        try:
+            if "T" in start_raw:
+                dt = datetime.fromisoformat(start_raw)
+                day_key = dt.strftime("%Y-%m-%d")
+                time_label = dt.strftime("%H:%M")
+            else:
+                day_key = start_raw
+                time_label = "all-day"
+        except ValueError:
+            day_key = start_raw[:10] if start_raw else "unknown"
+            time_label = ""
+
+        try:
+            if "T" in end_raw:
+                end_label = datetime.fromisoformat(end_raw).strftime("%H:%M")
+            else:
+                end_label = ""
+        except ValueError:
+            end_label = ""
+
+        event_summary = e.get("summary", "(no title)")
+        location = e.get("location", "")
+        description = (e.get("description") or "")[:120]
+
+        day_buckets.setdefault(day_key, []).append({
+            "time": time_label,
+            "end": end_label,
+            "summary": event_summary,
+            "location": location,
+            "description": description,
+            "id": e.get("id", ""),
+            "htmlLink": e.get("htmlLink", ""),
+        })
+
+    sorted_days = sorted(day_buckets.keys())
+    output_days = [{"date": d, "events": day_buckets[d]} for d in sorted_days]
+
+    if args.format == "markdown":
+        lines = ["## Calendar — " + week_start.strftime("%b %d") + " to " + week_end.strftime("%b %d, %Y"), ""]
+        if not output_days:
+            lines.append("_No events scheduled._")
+        for day_block in output_days:
+            try:
+                day_dt = datetime.fromisoformat(day_block["date"])
+                day_label = day_dt.strftime("%A, %b %d")
+            except ValueError:
+                day_label = day_block["date"]
+            lines.append(f"**{day_label}**")
+            for ev in day_block["events"]:
+                time_str = ev["time"]
+                if ev["end"]:
+                    time_str += f"–{ev['end']}"
+                loc = f" @ {ev['location']}" if ev["location"] else ""
+                lines.append(f"  • {time_str}  {ev['summary']}{loc}")
+                if ev["description"]:
+                    lines.append(f"    _{ev['description']}_")
+            lines.append("")
+        total = sum(len(d["events"]) for d in output_days)
+        lines.append(f"_{total} event{'s' if total != 1 else ''} across {len(output_days)} day{'s' if len(output_days) != 1 else ''}_")
+        print("\n".join(lines))
+    else:
+        print(json.dumps({
+            "window": {"start": time_min, "end": time_max},
+            "total_events": sum(len(d["events"]) for d in output_days),
+            "days": output_days,
+        }, indent=2, ensure_ascii=False))
+
+
 # =========================================================================
 # Drive
 # =========================================================================
@@ -806,6 +931,13 @@ def main():
     p.add_argument("event_id")
     p.add_argument("--calendar", default="primary")
     p.set_defaults(func=calendar_delete)
+
+    p = cal_sub.add_parser("summarize", help="Summarize upcoming week's events grouped by day")
+    p.add_argument("--week", action="store_true", help="Summarize next Mon–Sun week instead of next N days")
+    p.add_argument("--days", type=int, default=7, help="Number of days from now (default 7)")
+    p.add_argument("--calendar", default="primary")
+    p.add_argument("--format", choices=["json", "markdown"], default="json", help="Output format (default: json)")
+    p.set_defaults(func=calendar_summarize)
 
     # --- Drive ---
     drv = sub.add_parser("drive")
