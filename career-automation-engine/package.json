@@ -1,0 +1,22 @@
+{
+  "name": "career-automation-engine",
+  "version": "1.0.0",
+  "description": "Playwright + Google Sheets job-application automation with a human approval gate",
+  "private": true,
+  "main": "src/dashboard-server.js",
+  "scripts": {
+    "start": "node src/dashboard-server.js",
+    "processor": "node src/automation/job-processor.js",
+    "score": "python3 src/scripts/score-jobs.py",
+    "fetch": "python3 src/scripts/fetch-job-boards.py",
+    "validate": "node src/scripts/validate-config.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "playwright": "^1.47.0",
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "googleapis": "^140.0.1"
+  }
+}
