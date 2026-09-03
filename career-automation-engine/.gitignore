@@ -1,0 +1,14 @@
+node_modules/
+__pycache__/
+*.pyc
+.env
+service-account.json
+*.pdf
+logs/*.log
+screenshots/*.png
+state/*.json
+data/*.json
+!logs/.gitkeep
+!screenshots/.gitkeep
+!state/.gitkeep
+!data/.gitkeep
