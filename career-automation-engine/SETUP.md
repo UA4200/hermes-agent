@@ -33,15 +33,16 @@ cp .env.example .env
 
 **Claude API key** — from console.anthropic.com.
 
-**Google Sheets — service account (not a bare API key):**
-1. console.cloud.google.com → new or existing project
-2. Enable the "Google Sheets API"
-3. IAM & Admin → Service Accounts → Create → Keys → Add key → JSON
-4. Save the downloaded file as `service-account.json` in this folder
-   (already gitignored)
-5. Open the tracker sheet → Share → paste the service account's
-   `...@...iam.gserviceaccount.com` email → give it Editor access
-6. Set `GOOGLE_SHEET_ID` and `GOOGLE_SERVICE_ACCOUNT_KEY_PATH` in `.env`
+**Notion tracker** — the database itself already exists (created for
+this project — [Career Application Engine](https://app.notion.com/p/3e480c2d70db4f2b9b7934c2d8be7d92)),
+so this is just two steps:
+1. notion.so/my-integrations → New integration → give it any name →
+   copy its **Internal Integration Secret**
+2. Open the database link above → "..." menu (top right) → Connections
+   → add your integration
+3. Set `NOTION_API_KEY` in `.env` to the secret from step 1.
+   `NOTION_DATA_SOURCE_ID` in `.env.example` is already this project's
+   real tracker — leave it as-is unless you want a separate one.
 
 **Indeed session cookie** (needed for `fetch-job-boards.py --source indeed`):
 1. Sign into Indeed.com in Chrome
@@ -61,9 +62,9 @@ here and to `LINKEDIN_SESSION_COOKIE` if you choose to set that too.
 node src/scripts/validate-config.js
 ```
 
-Fix anything marked `✗` before moving on — in particular the Sheets
-connection check, which will fail if the service account hasn't been
-shared onto the sheet (step 2.5 above) even if the key file is valid.
+Fix anything marked `✗` before moving on — in particular the Notion
+connection check, which will fail if the database hasn't been shared
+with your integration (step 2 above) even if the API key is valid.
 
 ## 4. Discover + score
 
@@ -72,7 +73,7 @@ python3 src/scripts/fetch-job-boards.py --source indeed --limit 18
 python3 src/scripts/score-jobs.py --input data/jobs_discovered.json
 ```
 
-Check the tracker sheet: rows should appear with `status=SCORED` and a
+Check the [tracker database](https://app.notion.com/p/3e480c2d70db4f2b9b7934c2d8be7d92): rows should appear with `status=SCORED` and a
 `fitScore`. Add more boards with `--source remoteok`, `--source justjoinit`,
 `--source weworkremotely`, each followed by its own `score-jobs.py --input ...`
 call (or point `score-jobs.py` at a merged file). `--source hackernews`
@@ -95,16 +96,16 @@ Stop with `bash stop-automation.sh`.
 
 ## Troubleshooting
 
-- **"Google service account key not found"** — check `GOOGLE_SERVICE_ACCOUNT_KEY_PATH`
-  points at the real file, relative to where you run the command from.
-- **Sheets writes fail with a permissions error** — the service account
-  email isn't shared onto the sheet as an Editor (step 2.5).
+- **Notion writes fail with "object_not_found" or 403** — the database
+  isn't shared with your integration yet (step 2 above); sharing is
+  per-integration, so a new integration needs it re-added even if an
+  old one already had access.
 - **Playwright can't launch Chromium** — run `npx playwright install chromium`.
 - **Dashboard shows "Dashboard server unreachable"** — `dashboard-server.js`
   isn't running; check `logs/dashboard.log`.
 - **Dashboard stuck on "Idle" forever** — `job-processor.js` isn't
   running, or found zero jobs at/above `FIT_THRESHOLD`; check
-  `logs/processor.log` and the tracker sheet's `fitScore` column.
+  `logs/processor.log` and the tracker database's `Fit Score` column.
 - **Indeed/LinkedIn scraping returns nothing** — session cookie expired;
   get a fresh one (step 2).
 - **`hackernews` source fails to launch a browser** — run `crawl4ai-setup`

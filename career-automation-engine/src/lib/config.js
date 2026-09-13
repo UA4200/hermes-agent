@@ -13,12 +13,9 @@ const config = {
     batchSize: Number(required('CLAUDE_BATCH_SIZE', '10')),
     fitThreshold: Number(required('FIT_THRESHOLD', '70')),
   },
-  google: {
-    sheetId: required('GOOGLE_SHEET_ID'),
-    serviceAccountKeyPath: path.resolve(
-      process.cwd(),
-      required('GOOGLE_SERVICE_ACCOUNT_KEY_PATH', './service-account.json')
-    ),
+  notion: {
+    apiKey: required('NOTION_API_KEY'),
+    dataSourceId: required('NOTION_DATA_SOURCE_ID'),
   },
   indeed: {
     sessionCookie: required('INDEED_SESSION_COOKIE'),

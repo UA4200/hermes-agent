@@ -4,7 +4,7 @@ const path = require('path');
 const config = require('./lib/config');
 const logger = require('./lib/logger');
 const state = require('./lib/state');
-const sheets = require('./lib/sheets');
+const notion = require('./lib/notion');
 
 const app = express();
 app.use(cors());
@@ -41,7 +41,7 @@ app.post('/api/reject', (req, res) => {
 
 app.get('/api/log', async (req, res) => {
   try {
-    const jobs = await sheets.readAllJobs();
+    const jobs = await notion.readAllJobs();
     const recent = jobs
       .filter((j) => j.status === 'SUBMITTED' || j.status === 'REJECTED')
       .slice(-5)

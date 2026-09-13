@@ -1,9 +1,12 @@
 {
   "name": "career-automation-engine",
   "version": "1.0.0",
-  "description": "Playwright + Google Sheets job-application automation with a human approval gate",
+  "description": "Playwright + Notion job-application automation with a human approval gate",
   "private": true,
   "main": "src/dashboard-server.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node src/dashboard-server.js",
     "processor": "node src/automation/job-processor.js",
@@ -16,7 +19,6 @@
     "playwright": "^1.47.0",
     "express": "^4.19.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "googleapis": "^140.0.1"
+    "dotenv": "^16.4.5"
   }
 }
