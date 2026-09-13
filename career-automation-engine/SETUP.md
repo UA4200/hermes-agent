@@ -17,7 +17,13 @@ cd career-automation-engine
 npm install
 pip install -r requirements.txt
 npx playwright install chromium
+crawl4ai-setup
 ```
+
+`crawl4ai-setup` downloads crawl4ai's own browser (separate from the
+Node Playwright install above) — only needed if you'll use
+`fetch-job-boards.py --source hackernews`. `crawl4ai-doctor` diagnoses
+setup issues if the source fails.
 
 ## 2. Credentials
 
@@ -69,7 +75,11 @@ python3 src/scripts/score-jobs.py --input data/jobs_discovered.json
 Check the tracker sheet: rows should appear with `status=SCORED` and a
 `fitScore`. Add more boards with `--source remoteok`, `--source justjoinit`,
 `--source weworkremotely`, each followed by its own `score-jobs.py --input ...`
-call (or point `score-jobs.py` at a merged file).
+call (or point `score-jobs.py` at a merged file). `--source hackernews`
+pulls the current "Who is hiring?" thread (needs `crawl4ai-setup` above
+and `CLAUDE_API_KEY`, since it uses Claude to pull structured postings
+out of free-text comments) — not part of `--source all` since it's
+slower and makes several Claude API calls per run.
 
 ## 5. Run the automation
 
@@ -97,3 +107,6 @@ Stop with `bash stop-automation.sh`.
   `logs/processor.log` and the tracker sheet's `fitScore` column.
 - **Indeed/LinkedIn scraping returns nothing** — session cookie expired;
   get a fresh one (step 2).
+- **`hackernews` source fails to launch a browser** — run `crawl4ai-setup`
+  (or `crawl4ai-doctor` to diagnose); it needs its own downloaded browser,
+  separate from the Node Playwright install in step 1.
