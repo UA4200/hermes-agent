@@ -1,5 +1,5 @@
 """Scores discovered jobs with the Claude API and writes qualifying rows
-(fitScore >= FIT_THRESHOLD) to the Google Sheets tracker.
+(fitScore >= FIT_THRESHOLD) to the Notion tracker database.
 
 Usage:
     python score-jobs.py --source indeed --limit 18
@@ -14,7 +14,7 @@ import sys
 import anthropic
 from dotenv import load_dotenv
 
-from sheets_client import SheetsClient
+from notion_client_lib import NotionClient
 
 load_dotenv()
 
@@ -110,11 +110,11 @@ def main():
     batch_size = int(os.environ.get("CLAUDE_BATCH_SIZE", "10"))
     threshold = int(os.environ.get("FIT_THRESHOLD", "70"))
 
-    sheets = SheetsClient(
-        sheet_id=os.environ["GOOGLE_SHEET_ID"],
-        key_path=os.environ.get("GOOGLE_SERVICE_ACCOUNT_KEY_PATH", "./service-account.json"),
+    tracker = NotionClient(
+        api_key=os.environ.get("NOTION_API_KEY"),
+        data_source_id=os.environ.get("NOTION_DATA_SOURCE_ID"),
     )
-    existing_urls = sheets.existing_urls()
+    existing_urls = tracker.existing_urls()
 
     jobs = load_jobs(args, existing_urls)
     if not jobs:
@@ -152,7 +152,7 @@ def main():
         print(f"No jobs scored {threshold}+ out of {len(jobs)} evaluated.")
         return
 
-    sheets.append_jobs(scored_rows)
+    tracker.append_jobs(scored_rows)
     print(f"Wrote {len(scored_rows)} jobs scoring {threshold}+ to the tracker (out of {len(jobs)} evaluated).")
 
 

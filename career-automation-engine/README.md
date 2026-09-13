@@ -1,16 +1,20 @@
 # Career Automation Engine
 
-Playwright + Google Sheets job-application automation with a human
-approval gate, built from Nathan's handoff package (`README_AUTOMATION_PACKAGE.md`,
+Playwright + Notion job-application automation with a human approval
+gate, built from Nathan's handoff package (`README_AUTOMATION_PACKAGE.md`,
 `CLAUDE_CODE_HANDOFF.md`, `SETUP.md`, `IMPLEMENTATION_CHECKLIST.md`,
 `JOB_BOARDS.md`).
+
+Tracker: [Career Application Engine](https://app.notion.com/p/3e480c2d70db4f2b9b7934c2d8be7d92)
+(a Notion database, swapped in for the original spec's Google Sheet —
+see below for why).
 
 ## Status: code complete, NOT run or verified yet
 
 This was built and pushed from a cloud Claude Code session, which cannot
 run the actual system — there's no local browser, no persistent server
 reachable at `localhost:3000`, and no real credentials (Claude API key,
-Google service account, Indeed session cookie) available to it. Every
+Notion integration token, Indeed session cookie) available to it. Every
 file below exists and is internally consistent, but **Phases 2–4 of
 `IMPLEMENTATION_CHECKLIST.md` (scoring, dashboard, end-to-end submit)
 have not been executed against a live target.** Run it yourself per
@@ -32,6 +36,16 @@ CDN crawl4ai's browser needs, so the HN thread lookup and the crawl
 itself have not been executed end-to-end here — that needs your machine
 too.
 
+The Notion tracker swap has a similar mix of verified/not: the database
+itself is real (created via the Notion API in this session, schema
+confirmed by reading it back), and `src/lib/notion.js` /
+`src/scripts/notion_client_lib.py` are written against Notion's
+documented 2025-09-03 data-source API (parent-by-`data_source_id`,
+`/v1/data_sources/{id}/query`, property value shapes) — but neither
+client has made a real authenticated request, since that needs your own
+integration token. Run `validate-config.js` first; if the Notion check
+fails, that's the thing to debug before anything else.
+
 ## Real risk you're accepting
 
 Auto-filling and auto-submitting applications via Playwright against
@@ -48,9 +62,11 @@ with `--include-linkedin` in `fetch-job-boards.py`.
 - **`.env` instead of `CONFIG.json`.** Secrets in a `.json` file in a
   git repo are one `git add .` away from a leak; `.env` is gitignored
   by default across this whole toolchain.
-- **Google service account instead of a bare API key.** A plain Sheets
-  API key is read-only for public sheets — it cannot write the status
-  updates this system makes constantly. See `SETUP.md` step 2.
+- **Notion instead of Google Sheets.** Swapped in at Nathan's request —
+  a Google Cloud service account (project, enabled API, IAM, downloaded
+  JSON key) was more setup than the task needed. Notion needs one
+  integration token (created in Notion's own settings, no cloud console)
+  and sharing one database with it. See `SETUP.md` step 2.
 - **Cross-process state via `state/current-job.json`.** The original
   pseudocode had `dashboard-server.js` and `job-processor.js` share an
   in-memory `currentJob` variable, but `SETUP.md` runs them as two
@@ -90,18 +106,18 @@ src/
     playwright-automation.js  Field detection/fill, screenshots, submit, confirmation capture
   scripts/
     fetch-job-boards.py     Indeed (Selenium+cookie), RemoteOK/JustJoinIT/WWR (public APIs), LinkedIn (opt-in), Hacker News "Who is hiring?" (crawl4ai + Claude extraction, opt-in via --source hackernews)
-    score-jobs.py            Claude API fit scoring -> Sheets
-    sheets_client.py         Python Sheets read/append/update
+    score-jobs.py            Claude API fit scoring -> Notion
+    notion_client_lib.py     Python Notion read/append/update
     validate-config.js       Preflight credential/connectivity checks
   lib/
-    config.js, logger.js, state.js, sheets.js   Node-side shared helpers
+    config.js, logger.js, state.js, notion.js   Node-side shared helpers
 ```
 
-## Tracker columns (Google Sheet)
+## Tracker properties (Notion database)
 
-`A: Company | B: Role | C: Source | D: URL | E: Posted | F: Salary |
-G: Fit Score | H: Resume Used | I: Form Type | J: Status | K: Submitted
-Date | L: Confirmation # | M: Next Action`
+`Company (title) | Role | Source | URL | Posted | Salary | Fit Score |
+Resume Used | Form Type | Status | Submitted Date | Confirmation |
+Next Action`
 
 Status flows: `SCORED → FORM_FILLED → SUBMITTED` (or `REJECTED` /
 `ERROR`).
