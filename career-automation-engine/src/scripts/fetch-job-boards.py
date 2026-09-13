@@ -12,9 +12,23 @@ does carefully. Run these only with an account you're OK putting at
 risk, only from your own machine, and keep concurrency/frequency low.
 LinkedIn fetching is off unless you pass --include-linkedin explicitly.
 
+Hacker News "Who is hiring?" (--source hackernews) needs no login and
+no cookie — it's public and there's no ToS conflict — but it's a big
+page of free-text comments with no consistent structure, so plain
+requests + regex can't parse it usefully. It uses crawl4ai to fetch and
+convert the thread to clean markdown (crawl4ai handles JS rendering and
+boilerplate stripping so the comment text comes out readable), then
+asks Claude to pull structured job postings out of that markdown.
+Requires `crawl4ai-setup` once after `pip install -r requirements.txt`
+(downloads crawl4ai's own browser — see SETUP.md) and CLAUDE_API_KEY in
+.env. Not included in --source all by default since it burns several
+Claude API calls per run against a very long thread; request it
+explicitly with --source hackernews.
+
 Output: data/jobs_discovered.json, ready for score-jobs.py.
 """
 import argparse
+import asyncio
 import json
 import os
 import re
@@ -205,6 +219,112 @@ def fetch_linkedin(query="Senior Program Manager", location="United States"):
     return out
 
 
+HN_EXTRACTION_RUBRIC = """The text below is a chunk of comments from a Hacker \
+News "Who is hiring?" thread. Extract job postings that plausibly fit a \
+Senior Technical Program Manager / AI Program Manager / Healthcare IT PM \
+(10+ years, PMP-certified, healthcare IT, clinical research, security/compliance, \
+AI strategy, ERP/workforce-management, Python/APIs/SQL/AWS/Azure/Power BI/Tableau).
+
+Return ONLY a JSON array (no other text, no markdown fences). Each element:
+{"company": str, "title": str, "location": str, "salary": str or null,
+ "description": str (1-2 sentence summary of the posting)}
+
+If nothing in this chunk fits, return an empty array: []
+
+Comments:
+"""
+
+
+def find_latest_hn_hiring_thread():
+    """Uses HN's public Algolia search API (no scraping) to find the most
+    recent "Ask HN: Who is hiring?" thread, then returns its item id + URL."""
+    try:
+        resp = requests.get(
+            "https://hn.algolia.com/api/v1/search_by_date",
+            params={"query": "Who is hiring", "tags": "story,author_whoishiring", "hitsPerPage": 5},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        hits = resp.json().get("hits", [])
+    except Exception as e:
+        print(f"[hackernews] thread lookup failed: {e}", file=sys.stderr)
+        return None
+    for hit in hits:
+        title = (hit.get("title") or "")
+        if "who is hiring" in title.lower():
+            return {"id": hit["objectID"], "title": title, "url": f"https://news.ycombinator.com/item?id={hit['objectID']}"}
+    return None
+
+
+def _chunk_text(text, max_chars=8000):
+    for i in range(0, len(text), max_chars):
+        yield text[i:i + max_chars]
+
+
+async def _crawl_hn_thread_markdown(url):
+    from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
+
+    browser_cfg = BrowserConfig(headless=True)
+    run_cfg = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, word_count_threshold=3, check_robots_txt=True)
+    async with AsyncWebCrawler(config=browser_cfg) as crawler:
+        result = await crawler.arun(url=url, config=run_cfg)
+        if not result.success:
+            raise RuntimeError(getattr(result, "error_message", "crawl4ai fetch failed"))
+        return str(result.markdown)
+
+
+def fetch_hackernews_hiring():
+    claude_key = os.environ.get("CLAUDE_API_KEY")
+    if not claude_key:
+        print("[hackernews] CLAUDE_API_KEY not set — skipping (extraction needs it).", file=sys.stderr)
+        return []
+
+    thread = find_latest_hn_hiring_thread()
+    if not thread:
+        print("[hackernews] could not find a current 'Who is hiring?' thread — skipping.", file=sys.stderr)
+        return []
+    print(f"[hackernews] using thread: {thread['title']} ({thread['url']})")
+
+    try:
+        markdown = asyncio.run(_crawl_hn_thread_markdown(thread["url"]))
+    except Exception as e:
+        print(f"[hackernews] crawl4ai fetch failed: {e}", file=sys.stderr)
+        return []
+
+    import anthropic
+    client = anthropic.Anthropic(api_key=claude_key)
+    model = os.environ.get("CLAUDE_MODEL", "claude-opus-5")
+
+    out = []
+    for chunk in _chunk_text(markdown):
+        if not chunk.strip():
+            continue
+        try:
+            resp = client.messages.create(
+                model=model, max_tokens=2000,
+                messages=[{"role": "user", "content": HN_EXTRACTION_RUBRIC + chunk}],
+            )
+            text = resp.content[0].text.strip()
+            if text.startswith("```"):
+                text = text.split("```")[1]
+                if text.startswith("json"):
+                    text = text[4:]
+            postings = json.loads(text)
+        except Exception as e:
+            print(f"[hackernews] extraction failed on one chunk: {e}", file=sys.stderr)
+            continue
+        for p in postings:
+            out.append(normalize(
+                company=p.get("company"), title=p.get("title"),
+                url=thread["url"], source="hackernews",
+                location=p.get("location"),
+                salary=p.get("salary"), description=p.get("description", ""),
+            ))
+
+    print(f"[hackernews] {len(out)} matching postings (url points to the thread — search it for the exact comment)")
+    return out
+
+
 def dedupe(jobs):
     seen = set()
     out = []
@@ -219,7 +339,7 @@ def dedupe(jobs):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source", default="all", help="all | indeed | remoteok | linkedin | justjoinit | weworkremotely")
+    parser.add_argument("--source", default="all", help="all | indeed | remoteok | linkedin | justjoinit | weworkremotely | hackernews")
     parser.add_argument("--limit", type=int, default=18)
     parser.add_argument("--include-linkedin", action="store_true", help="Explicitly opt in to LinkedIn scraping (account-risk, off by default)")
     args = parser.parse_args()
@@ -235,6 +355,10 @@ def main():
         jobs += fetch_weworkremotely()
     if args.source == "linkedin" or (args.source == "all" and args.include_linkedin):
         jobs += fetch_linkedin()
+    if args.source == "hackernews":
+        # Not part of --source all: several Claude API calls per run against
+        # a very long thread, so it's opt-in only.
+        jobs += fetch_hackernews_hiring()
 
     jobs = dedupe(jobs)
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)

@@ -19,6 +19,19 @@ formality — some ATS forms will need selector tweaks in
 `src/automation/playwright-automation.js` that no amount of code review
 substitutes for.
 
+The `--source hackernews` discovery path (added later, via crawl4ai) has
+a bit more verification behind it than the rest: the exact crawl4ai
+0.9.3 API this code calls (`AsyncWebCrawler`, `CrawlerRunConfig`,
+`BrowserConfig`) was checked against a real install via
+`inspect.signature`, `requirements.txt` was confirmed to install cleanly
+in a fresh venv (crawl4ai needs `aiohttp>=3.11.11`, which the original
+pin of `3.10.5` conflicted with — bumped it), and the Python syntax
+compiles. What's **not** verified: an actual live run. This sandbox's
+network egress doesn't allow `hn.algolia.com` or the Chrome-for-Testing
+CDN crawl4ai's browser needs, so the HN thread lookup and the crawl
+itself have not been executed end-to-end here — that needs your machine
+too.
+
 ## Real risk you're accepting
 
 Auto-filling and auto-submitting applications via Playwright against
@@ -76,7 +89,7 @@ src/
     job-processor.js        Owns the Playwright browser; drives the approval loop
     playwright-automation.js  Field detection/fill, screenshots, submit, confirmation capture
   scripts/
-    fetch-job-boards.py     Indeed (Selenium+cookie), RemoteOK/JustJoinIT/WWR (public APIs), LinkedIn (opt-in)
+    fetch-job-boards.py     Indeed (Selenium+cookie), RemoteOK/JustJoinIT/WWR (public APIs), LinkedIn (opt-in), Hacker News "Who is hiring?" (crawl4ai + Claude extraction, opt-in via --source hackernews)
     score-jobs.py            Claude API fit scoring -> Sheets
     sheets_client.py         Python Sheets read/append/update
     validate-config.js       Preflight credential/connectivity checks
