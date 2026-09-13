@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Career Automation Dashboard</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+  .status { font-size: 14px; color: #666; margin-bottom: 24px; }
+  .card { border: 1px solid #ccc; border-radius: 8px; padding: 20px; }
+  .idle { text-align: center; color: #888; padding: 40px 0; }
+  h2 { margin: 0 0 4px; }
+  .role { color: #555; margin-bottom: 12px; }
+  .meta { font-size: 13px; color: #777; margin-bottom: 12px; }
+  .fields { font-size: 13px; margin-bottom: 16px; }
+  .fields .missed { color: #b00; }
+  .actions button { padding: 10px 18px; font-size: 14px; margin-right: 8px; border-radius: 6px; border: none; cursor: pointer; }
+  .approve { background: #1a7f37; color: white; }
+  .reject { background: #b00; color: white; }
+  .log { margin-top: 32px; }
+  .log h3 { font-size: 14px; color: #666; }
+  .log-row { font-size: 13px; padding: 6px 0; border-bottom: 1px solid #eee; }
+</style>
+</head>
+<body>
+  <div class="status" id="status">Loading...</div>
+  <div class="card" id="card"></div>
+  <div class="log">
+    <h3>Recent submissions</h3>
+    <div id="log"></div>
+  </div>
+
+<script>
+async function poll() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    render(data);
+  } catch (e) {
+    document.getElementById('status').textContent = 'Dashboard server unreachable — is dashboard-server.js running?';
+  }
+}
+
+function render(data) {
+  const statusEl = document.getElementById('status');
+  const cardEl = document.getElementById('card');
+
+  if (data.status === 'IDLE' || !data.job) {
+    statusEl.textContent = 'Idle — waiting for job-processor.js to fill the next application.';
+    cardEl.innerHTML = '<div class="idle">No application awaiting review.</div>';
+    return;
+  }
+
+  statusEl.textContent = 'Awaiting Your Approval';
+  const job = data.job;
+  const filled = (job.filled || []).join(', ') || 'none';
+  const missed = (job.missed || []).join(', ');
+
+  cardEl.innerHTML = `
+    <h2>${escapeHtml(job.company || '')}</h2>
+    <div class="role">${escapeHtml(job.role || '')}</div>
+    <div class="meta">Fit score: ${escapeHtml(String(job.fitScore || ''))} · Form type: ${escapeHtml(job.formType || 'Unknown')}</div>
+    <div class="fields">
+      Auto-filled: ${escapeHtml(filled)}<br/>
+      ${missed ? `<span class="missed">Needs manual review: ${escapeHtml(missed)}</span><br/>` : ''}
+      ${job.questionCount ? `${job.questionCount} screening question field(s) detected — check the screenshot at ${escapeHtml(job.screenshotPath || '')}` : ''}
+    </div>
+    <div class="actions">
+      <button class="approve" onclick="decide('approve')">Approve &amp; Submit</button>
+      <button class="reject" onclick="decide('reject')">Reject</button>
+    </div>
+  `;
+}
+
+async function decide(action) {
+  await fetch('/api/' + action, { method: 'POST' });
+  poll();
+  loadLog();
+}
+
+async function loadLog() {
+  try {
+    const res = await fetch('/api/log');
+    const rows = await res.json();
+    document.getElementById('log').innerHTML = rows.map(r =>
+      `<div class="log-row">${escapeHtml(r.company)} — ${escapeHtml(r.role)} — ${escapeHtml(r.status)}</div>`
+    ).join('') || '<div class="log-row">Nothing yet.</div>';
+  } catch {}
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+poll();
+loadLog();
+setInterval(poll, 2000);
+setInterval(loadLog, 10000);
+</script>
+</body>
+</html>

@@ -1,0 +1,123 @@
+# Career Automation Engine
+
+Playwright + Notion job-application automation with a human approval
+gate, built from Nathan's handoff package (`README_AUTOMATION_PACKAGE.md`,
+`CLAUDE_CODE_HANDOFF.md`, `SETUP.md`, `IMPLEMENTATION_CHECKLIST.md`,
+`JOB_BOARDS.md`).
+
+Tracker: [Career Application Engine](https://app.notion.com/p/3e480c2d70db4f2b9b7934c2d8be7d92)
+(a Notion database, swapped in for the original spec's Google Sheet —
+see below for why).
+
+## Status: code complete, NOT run or verified yet
+
+This was built and pushed from a cloud Claude Code session, which cannot
+run the actual system — there's no local browser, no persistent server
+reachable at `localhost:3000`, and no real credentials (Claude API key,
+Notion integration token, Indeed session cookie) available to it. Every
+file below exists and is internally consistent, but **Phases 2–4 of
+`IMPLEMENTATION_CHECKLIST.md` (scoring, dashboard, end-to-end submit)
+have not been executed against a live target.** Run it yourself per
+"Run it" below, and treat the first cycle as a real test, not a
+formality — some ATS forms will need selector tweaks in
+`src/automation/playwright-automation.js` that no amount of code review
+substitutes for.
+
+The `--source hackernews` discovery path (added later, via crawl4ai) has
+a bit more verification behind it than the rest: the exact crawl4ai
+0.9.3 API this code calls (`AsyncWebCrawler`, `CrawlerRunConfig`,
+`BrowserConfig`) was checked against a real install via
+`inspect.signature`, `requirements.txt` was confirmed to install cleanly
+in a fresh venv (crawl4ai needs `aiohttp>=3.11.11`, which the original
+pin of `3.10.5` conflicted with — bumped it), and the Python syntax
+compiles. What's **not** verified: an actual live run. This sandbox's
+network egress doesn't allow `hn.algolia.com` or the Chrome-for-Testing
+CDN crawl4ai's browser needs, so the HN thread lookup and the crawl
+itself have not been executed end-to-end here — that needs your machine
+too.
+
+The Notion tracker swap has a similar mix of verified/not: the database
+itself is real (created via the Notion API in this session, schema
+confirmed by reading it back), and `src/lib/notion.js` /
+`src/scripts/notion_client_lib.py` are written against Notion's
+documented 2025-09-03 data-source API (parent-by-`data_source_id`,
+`/v1/data_sources/{id}/query`, property value shapes) — but neither
+client has made a real authenticated request, since that needs your own
+integration token. Run `validate-config.js` first; if the Notion check
+fails, that's the thing to debug before anything else.
+
+## Real risk you're accepting
+
+Auto-filling and auto-submitting applications via Playwright against
+Indeed and (if enabled) LinkedIn conflicts with those platforms'
+Terms of Service, and their anti-bot detection can flag or suspend the
+account whose session cookie you use — independent of the human
+approval step. You told Claude Code to build the full pipeline anyway;
+this is not hidden by the approval gate, just noted here so it stays
+visible. LinkedIn scraping ships **off by default** — enable explicitly
+with `--include-linkedin` in `fetch-job-boards.py`.
+
+## What's different from the original spec, and why
+
+- **`.env` instead of `CONFIG.json`.** Secrets in a `.json` file in a
+  git repo are one `git add .` away from a leak; `.env` is gitignored
+  by default across this whole toolchain.
+- **Notion instead of Google Sheets.** Swapped in at Nathan's request —
+  a Google Cloud service account (project, enabled API, IAM, downloaded
+  JSON key) was more setup than the task needed. Notion needs one
+  integration token (created in Notion's own settings, no cloud console)
+  and sharing one database with it. See `SETUP.md` step 2.
+- **Cross-process state via `state/current-job.json`.** The original
+  pseudocode had `dashboard-server.js` and `job-processor.js` share an
+  in-memory `currentJob` variable, but `SETUP.md` runs them as two
+  separate `node` processes — plain JS variables don't cross process
+  boundaries. A small state file is the fix; `dashboard-server.js`
+  never touches Playwright directly, only `job-processor.js` (which
+  owns the browser) does.
+
+## Run it (on your own machine, not a cloud session)
+
+```bash
+cd career-automation-engine
+npm install
+pip install -r requirements.txt
+cp .env.example .env        # fill in real values — see SETUP.md
+node src/scripts/validate-config.js
+
+python3 src/scripts/fetch-job-boards.py --source indeed --limit 18
+python3 src/scripts/score-jobs.py --input data/jobs_discovered.json
+
+bash start-automation.sh
+# open http://localhost:3000
+```
+
+See `SETUP.md` for credential setup and `IMPLEMENTATION_CHECKLIST.md`
+for the full phase-by-phase validation checklist — follow it for real;
+none of those checks have been ticked yet.
+
+## Layout
+
+```
+src/
+  dashboard-server.js       Express app: /api/status, /api/approve, /api/reject, /api/log
+  dashboard/index.html      Approval UI (polls /api/status every 2s)
+  automation/
+    job-processor.js        Owns the Playwright browser; drives the approval loop
+    playwright-automation.js  Field detection/fill, screenshots, submit, confirmation capture
+  scripts/
+    fetch-job-boards.py     Indeed (Selenium+cookie), RemoteOK/JustJoinIT/WWR (public APIs), LinkedIn (opt-in), Hacker News "Who is hiring?" (crawl4ai + Claude extraction, opt-in via --source hackernews)
+    score-jobs.py            Claude API fit scoring -> Notion
+    notion_client_lib.py     Python Notion read/append/update
+    validate-config.js       Preflight credential/connectivity checks
+  lib/
+    config.js, logger.js, state.js, notion.js   Node-side shared helpers
+```
+
+## Tracker properties (Notion database)
+
+`Company (title) | Role | Source | URL | Posted | Salary | Fit Score |
+Resume Used | Form Type | Status | Submitted Date | Confirmation |
+Next Action`
+
+Status flows: `SCORED → FORM_FILLED → SUBMITTED` (or `REJECTED` /
+`ERROR`).
