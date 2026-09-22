@@ -48,13 +48,24 @@ check):**
 ```json
 {"checks": {"health": true, "paid_cost_gate": false, "privacy_classifier": true}, "status": "FAIL"}
 ```
-**The `paid_cost_gate` check is currently failing.** This canary
-deliberately sends an oversized fake Opus request expecting an HTTP 403
-`cost_limit` rejection from `oe-proxy`. It isn't happening. This
-independently confirms, from a completely different angle than Workstream
-6's static-code-reading finding, that this system's cost enforcement is
-not actually working at the `oe-proxy` layer either — not just
-`ai_router.py`'s.
+**The `paid_cost_gate` check is currently failing — but not for the
+reason it looks like at first.** This canary sends an oversized fake Opus
+request (`max_tokens: 100000`) expecting an HTTP 403 `cost_limit`
+rejection from `oe-proxy`. Checking the *actual* raw response (not just
+the canary's boolean summary) shows: **HTTP 400,
+`{"error": {"type": "invalid_request_error", "message":
+"invalid_request_fields"}}`** — not a 200 success, and not the 403
+`cost_limit` the test expects either. This matters a lot for severity:
+**no money is being spent** — the request is rejected — but it's rejected
+for an unrelated validation reason, before whatever cost-gate logic
+exists ever gets a chance to run. This is most likely a **stale test**
+(oe-proxy's request validation changed since this canary was written, and
+now rejects the probe's shape before reaching the cost check it means to
+exercise) rather than confirmed proof the cost gate itself is absent.
+Whether real cost enforcement exists and works at the `oe-proxy` layer is
+now genuinely **unverified, not confirmed-broken** — a materially
+different, more accurate finding than this document's first draft stated
+before the raw response was checked.
 
 **The automated remediation for this is itself broken.** The hourly cron
 entry (`17 * * * * ... canary --rollback-on-critical`) should attempt
@@ -75,10 +86,14 @@ on this host; noted as evidence someone/something is actively working the
 same class of issue today, not investigated further here to avoid
 duplicating that work blind.
 
-**Net effect:** the failing cost-gate has had no working automatic
-remediation for an unknown period — the hourly job has presumably been
-crash-looping silently rather than either fixing or clearly alerting on
-the underlying problem.
+**Net effect:** a stale (or newly-mismatched) canary test has had no
+working automatic remediation for an unknown period — the hourly job has
+presumably been crash-looping silently rather than either fixing or
+clearly alerting. No evidence of real financial exposure (the probe
+request is rejected, not executed) — but the underlying question this
+canary was built to answer (does `oe-proxy` actually enforce a cost
+limit?) is now open again, not settled, since the test that was supposed
+to verify it no longer exercises the code path it claims to.
 
 ## Dormant Components — Retirement Confirmed Safe
 
@@ -117,11 +132,15 @@ invocation) — that's a report artifact, not a configuration change.
    `pm2 save` cron entry today — same root cause, same fix shape. Small,
    isolated, high-value. Held for your go-ahead per this program's
    running policy on live-host changes.
-2. **Investigate why `paid_cost_gate` is failing** — this is now
-   confirmed from two independent angles (Workstream 6's code read,
-   Workstream 7's live canary) and should be prioritized over the PATH
-   fix, since a working rollback for a gate that doesn't work yet only
-   restores a non-working state.
+2. **Fix or replace the `paid_cost_gate` canary probe** so it actually
+   exercises `oe-proxy`'s cost-limit logic again (its current request
+   shape gets rejected by input validation before reaching that code),
+   and **separately verify whether `oe-proxy` cost enforcement exists and
+   works at all** — Workstream 6 already found the equivalent enforcement
+   missing in `ai_router.py`'s code; whether `oe-proxy` has its own
+   working version is now an open question, not a confirmed gap. Resolve
+   this before the PATH fix — a working rollback for a test that isn't
+   testing the right thing doesn't add real safety.
 3. **Clear the expired pending approval** and consider whether expiry
    should auto-reject rather than sit indefinitely.
 4. Retire `model-cost-gateway`, `native-router`, `economic_guard.py`,
