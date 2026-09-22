@@ -20,10 +20,12 @@ list) surfaced two more parallel, unused routing implementations:
 2. **`fcc_router.py`** — *"FCC Governed Auto-Selector — Open Empire Cost
    Router... Role: Select cheapest passing provider for any given task
    type."* Has its own complete task-chain map and cost table, entirely
-   separate from `adaptive_router.py`'s and `ai_router.py`'s. Grepped for
-   importers this session (`from fcc_router import` / `import
-   fcc_router`) across `~/.openclaw`: **zero results.** Only its own
-   file's docstring shows the intended usage — never actually adopted.
+   separate from `adaptive_router.py`'s and `ai_router.py`'s. **See the
+   correction appended at the end of this document** — the original
+   "zero importers found" claim here was based on a background grep that
+   had not actually finished when this section was first written; the
+   real, complete evidence (found later, documented below) points to the
+   same practical conclusion but for a different, more precise reason.
 
 This brings the real count of independently-built, never-integrated
 routing implementations on this one host to **seven**:
@@ -47,7 +49,7 @@ other four confirmed across Phase 1 and this workstream).
 | `economic_guard.py` | **Retire** | Not imported anywhere, not in any cron entry (Phase 1) |
 | `groq_rotator.py` | **Retire** | Same — not imported, not scheduled (Phase 1) |
 | `claude-proxy` | **Retire** | Structurally unreachable — nothing points at its port (this workstream) |
-| `fcc_router.py` | **Retire** (or **Archive** as a design reference — see below) | Zero importers found anywhere (this workstream) |
+| `fcc_router.py` | **Retire** (or **Archive** as a design reference — see below) | Not imported by either live entry point (`oe_proxy.py`'s and `ai_router.py`'s own import statements, read directly — see correction below for why the earlier "zero grep matches anywhere" framing was imprecise) |
 
 **Nothing was classified as "Archive" outright** in the brief's sense of
 "keep the code, stop running it" vs. "Retire" (remove entirely) — that
@@ -86,3 +88,49 @@ own deliverable is the plan, not the action. Workstream 10 (Prioritized
 Remediation) or a direct follow-up request from you are the right places
 to actually execute step 1 above, now that write access has been granted
 for this session.
+
+## Correction (Post-Phase-2, Delayed Background Search Returned Late)
+
+A background grep for `fcc_router` importers, launched during this
+workstream's original investigation, had not finished by the time this
+document was first written — it was treated as "zero results" when it
+had actually just not returned yet, the same class of mistake as the
+`paid_cost_gate` correction elsewhere in this program. When it finally
+completed, it surfaced something worth taking seriously: a compiled
+bytecode cache, `__pycache__/fcc_router.cpython-314.pyc`, dated **Sep 15
+23:04** — `.pyc` files are only generated when a module is actually
+`import`-ed somewhere, not merely present on disk.
+
+**Investigated rather than left standing as a new alarm.** Listed the
+entire `router/__pycache__/` directory: **every single module in that
+directory has a `.pyc`** — including `adaptive_router.py` and
+`oe_proxy.py` (confirmed live and active) *and* `economic_guard.py`,
+`groq_rotator.py`, `fcc_metrics_exporter.py`, `kg_api.py`,
+`repo_factory.py`, `task_observer_collector.py` (all previously
+classified dormant) — all compiled within the same narrow window,
+**Sep 13, 05:07 or Sep 15, 00:50-23:04**. This lines up exactly with
+backup directory names already found in this program's own evidence
+(`oe-proxy-p1-hardening-20260915-054641`,
+`open-empire-p1-router-hardening-20260915-225832`): a one-time bulk
+hardening/test pass almost certainly imported every `.py` file in the
+directory at once, generating bytecode caches for all of them
+regardless of which ones are actually wired into live traffic. **This
+is evidence of a historical bulk operation, not evidence of ongoing
+individual production use** — and it does not distinguish `fcc_router.py`
+from the two modules already independently confirmed live by a much
+stronger signal (`oe_proxy.py`'s own source, read directly, imports only
+`adaptive_router as AR` and `inference_approval as IA` — nothing else in
+that directory, `fcc_router` included).
+
+**Net effect on the classification: unchanged, but the evidence chain
+supporting it is now precise rather than resting on an incomplete
+search.** `fcc_router.py`'s **Retire** classification stands — on the
+basis of "not imported by either live entry point's own source," not
+"zero references found anywhere," which was never quite true and is now
+correctly retracted. The same caution is worth extending to
+`economic_guard.py` and `groq_rotator.py`'s Phase 1 "not imported
+anywhere" claims — not retracted here (Phase 1's own check was not
+re-verified this pass), but flagged as resting on the same class of
+grep-based evidence that just proved incomplete once for a sibling
+module, and worth a fresh, complete re-check before either is actually
+deleted (not just stopped) in a future step.
