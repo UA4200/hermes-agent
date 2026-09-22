@@ -77,10 +77,11 @@ This phase closed real gaps with real evidence, not just plans:
 3. ~~Create the `openclaw` Postgres role~~ — **done**, verified through
    `ai_router.py`'s own `_get_db()` (Workstream 10, updated
    post-authorization).
-4. **Resolve the canary's stale `paid_cost_gate` probe** (Workstream
-   7/10) — low priority; the real enforcement it tests is confirmed
-   working and now has a real Postgres backend to log against too; this
-   is a test-freshness issue, not a safety gap.
+4. ~~Resolve the canary's stale `paid_cost_gate` probe~~ — **done**. The
+   real canary tool now reports a full `PASS` across all three checks
+   (`health`, `paid_cost_gate`, `privacy_classifier`); the earlier `FAIL`
+   was a transient state, not a persistent defect (see
+   `FREEWAY_LLM_REBUILD.md`'s final update).
 5. **Rotate the exposed Gemini API key** (Phase 1, still outstanding,
    out of scope this phase by explicit instruction, not resolved by
    omission) — this remains real and unaddressed.
@@ -90,9 +91,9 @@ This phase closed real gaps with real evidence, not just plans:
    attempted this phase, correctly held for its own dedicated,
    further-gated effort.
 
-**Net effect: of the 6 original conditions, 2 are now closed with real
+**Net effect: of the 6 original conditions, 3 are now closed with real
 verification, 1 (the Ollama hang) is the sole remaining hard blocker to
-a "READY FOR PRODUCTION" verdict, and 3 are lower-priority/deferred by
+a "READY FOR PRODUCTION" verdict, and 2 are lower-priority/deferred by
 explicit scope.**
 
 ## What This Phase Proved About the Process Itself

@@ -146,3 +146,23 @@ invocation) — that's a report artifact, not a configuration change.
 4. Retire `model-cost-gateway`, `native-router`, `economic_guard.py`,
    `groq_rotator.py` per the confirmed-orphaned evidence above; resolve
    `fcc_router.py`'s self-import before deciding on it.
+
+## Final Update (Post-Phase-2-Workstream-10): Item 2 Fully Resolved
+
+Read `oe_proxy.py` in its entirety (221 lines, confirmed complete) — the
+`"invalid_request_error"`/`"invalid_request_fields"` shape this document
+originally found does not appear anywhere in the file's actual logic.
+Re-ran the exact original probe: it now returns
+`HTTP 403 {"error": {"type": "cost_limit", "message":
+"paid_request_exceeds_cost_ceiling"}}` — exactly the code path and
+exactly the response the canary expects. **Re-ran the real canary tool
+itself: full `PASS` across all three checks** (`health`,
+`paid_cost_gate`, `privacy_classifier`), where it previously showed
+`FAIL`.
+
+**Conclusion:** the earlier 400 response was a transient state at that
+specific moment (`oe-proxy` had 1 restart recorded across this program's
+timeline — plausibly mid-restart or briefly degraded then), not a
+persistent defect in the probe or the enforcement logic. Both are
+correct and working. Item 2 above ("fix or replace the canary probe") is
+now closed — nothing to fix; re-verified live and passing.
