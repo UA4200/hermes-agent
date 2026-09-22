@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
+from .budget_enforcement import BudgetEnforcer
 from .cache import NoOpCache, SemanticCache
 from .compress import NoOpCompressor, Compressor
 from .engine import Candidate, RouterState, rank_candidates
@@ -19,6 +20,11 @@ from .policy import Policy
 
 
 ProviderCaller = Callable[[str, str], str]  # (model, prompt) -> response text
+
+
+def _estimate_tokens(text: str) -> int:
+    """Same rough estimate ai_router.py itself uses: 1 token ~= 4 chars."""
+    return max(1, len(text) // 4)
 
 
 @dataclass
@@ -34,6 +40,8 @@ class RouteResult:
     attempts: list[str] = field(default_factory=list)
     success: bool = True
     error: str | None = None
+    budget_warning: bool = False
+    budget_blocked_tiers: list[str] = field(default_factory=list)
 
 
 class Router:
@@ -47,6 +55,8 @@ class Router:
         compressor: Compressor | None = None,
         compress_task_types: frozenset[str] = frozenset({"high_value", "paramount"}),
         compress_threshold_chars: int = 4000,
+        budget: BudgetEnforcer | None = None,
+        default_max_output_tokens: int = 500,
     ):
         """
         candidates_by_tier: maps a policy tier name (e.g. "local", "haiku")
@@ -65,6 +75,8 @@ class Router:
         self.compressor = compressor or NoOpCompressor()
         self.compress_task_types = compress_task_types
         self.compress_threshold_chars = compress_threshold_chars
+        self.budget = budget  # None = no enforcement, unchanged Workstream 5 behavior
+        self.default_max_output_tokens = default_max_output_tokens
 
     def route(
         self,
@@ -99,6 +111,9 @@ class Router:
         ranked = rank_candidates(candidates, required_capabilities, self.state)
 
         attempts: list[str] = []
+        budget_blocked_tiers: list[str] = []
+        budget_warning = self.budget.status().state == "warning" if self.budget else False
+
         for candidate in ranked:
             key = f"{candidate.provider}/{candidate.model}"
             tier_name = next(
@@ -107,6 +122,26 @@ class Router:
             caller = self.callers.get(tier_name)
             if caller is None:
                 continue
+
+            # Real cost-limit enforcement (Phase 2 Workstream 6) -- the gap
+            # Phase 1 found: a candidate whose estimated cost would breach
+            # a budget, or that violates a local-first-only task type, is
+            # treated as ineligible and skipped, exactly like a circuit-
+            # broken provider. This IS "automatic downgrade" / "automatic
+            # local-first execution" in practice -- the loop naturally
+            # falls through to the next, cheaper/local candidate.
+            if self.budget is not None:
+                blocked, reason = self.budget.enforce_local_first(task_type, tier_name)
+                if not blocked:
+                    est_input = _estimate_tokens(effective_prompt)
+                    est_cost = self.policy.cost_per_call(
+                        tier_name, est_input, self.default_max_output_tokens
+                    )
+                    blocked, reason = self.budget.would_exceed(tier_name, candidate.model, est_cost)
+                if blocked:
+                    budget_blocked_tiers.append(f"{key}:{reason}")
+                    continue
+
             attempts.append(key)
             call_start = time.time()
             try:
@@ -114,6 +149,11 @@ class Router:
                 latency_ms = (time.time() - call_start) * 1000
                 self.state.record_success(key, latency_ms)
                 self.cache.put(prompt, text)
+                if self.budget is not None:
+                    est_input = _estimate_tokens(effective_prompt)
+                    est_output = _estimate_tokens(text)
+                    actual_cost_est = self.policy.cost_per_call(tier_name, est_input, est_output)
+                    self.budget.record_spend(candidate.model, actual_cost_est)
                 return RouteResult(
                     text=text,
                     provider=candidate.provider,
@@ -125,6 +165,8 @@ class Router:
                     latency_ms=(time.time() - t_start) * 1000,
                     attempts=attempts,
                     success=True,
+                    budget_warning=budget_warning,
+                    budget_blocked_tiers=budget_blocked_tiers,
                 )
             except Exception as e:  # noqa: BLE001 - mirrors adaptive_router.py's
                 # broad catch-and-try-next-candidate behavior; a bad provider
@@ -132,6 +174,13 @@ class Router:
                 self.state.record_failure(key)
                 attempts.append(f"{key}:FAILED:{e}")
 
+        error = "all_candidates_failed"
+        if budget_blocked_tiers and not attempts:
+            # Every eligible candidate was budget-blocked, none was even
+            # attempted -- a distinct, real failure mode from "tried and
+            # failed", worth surfacing as such rather than collapsing into
+            # the generic error.
+            error = "all_candidates_budget_blocked"
         return RouteResult(
             text="",
             provider="",
@@ -143,5 +192,7 @@ class Router:
             latency_ms=(time.time() - t_start) * 1000,
             attempts=attempts,
             success=False,
-            error="all_candidates_failed",
+            error=error,
+            budget_warning=budget_warning,
+            budget_blocked_tiers=budget_blocked_tiers,
         )
