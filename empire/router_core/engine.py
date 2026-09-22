@@ -3,15 +3,22 @@
 Pattern borrowed from adaptive_router.py's RouterState/score_candidate/
 rank_candidates on ugos-mac-mini (read live, not guessed) -- reimplemented
 independently, not copy-pasted, so this can be reviewed and tested on its
-own before anyone considers pointing real traffic at it. Does NOT carry
-over adaptive_router.py's tuned scoring weights, provider catalog, or
-circuit-breaker timing -- those encode real production tuning decisions
-that shouldn't be guessed at from outside. See README.md.
+own before anyone considers pointing real traffic at it.
+
+Update, Phase 2 Workstream 2: the real tuned scoring weights and provider
+catalog (previously deliberately NOT carried over, per Phase 1's README)
+are now ported faithfully in catalog.py, offered as an explicit opt-in
+(REAL_SCORE_WEIGHTS, real_alusi_candidates(), real_cost_score) so
+equivalence with the live system can actually be tested -- this module's
+own DEFAULT_WEIGHTS and the illustrative example data callers pass by
+hand remain the defaults; nothing here silently switched to the real
+values.
 """
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import Callable
 
 
 @dataclass
@@ -102,10 +109,20 @@ def score_candidate(
     required_capabilities: frozenset[str],
     state: RouterState,
     weights: dict[str, float] | None = None,
+    cost_score_fn: Callable[[Candidate], float] | None = None,
 ) -> float:
     """Score a candidate for a task. Returns -1.0 if ineligible
     (missing capability or circuit-broken), matching adaptive_router.py's
-    sentinel convention rather than raising -- callers filter on >= 0."""
+    sentinel convention rather than raising -- callers filter on >= 0.
+
+    cost_score_fn overrides the default binary free/paid cost score with
+    a caller-supplied function -- e.g. catalog.py's real_cost_score,
+    which reproduces adaptive_router.py's actual graduated pricing
+    (openai sub-tiers, haiku/sonnet/opus each scored differently) instead
+    of this module's simpler free-vs-paid default. Kept as an injection
+    point rather than hardcoded here so engine.py stays product-agnostic
+    (Workstream 9's design principle) while still allowing exact real
+    fidelity when a caller wants it."""
     weights = weights or DEFAULT_WEIGHTS
     if not required_capabilities.issubset(candidate.capabilities):
         return -1.0
@@ -115,7 +132,7 @@ def score_candidate(
         return -1.0
 
     p = state.get(key)
-    cost_score = 1.0 if candidate.is_free else 0.2
+    cost_score = cost_score_fn(candidate) if cost_score_fn else (1.0 if candidate.is_free else 0.2)
     quality_score = 0.7  # no history tracked in this prototype; a real
     # deployment would persist quality feedback the way adaptive_router.py
     # does via record_success(..., quality=...)
@@ -139,9 +156,10 @@ def rank_candidates(
     required_capabilities: frozenset[str],
     state: RouterState,
     weights: dict[str, float] | None = None,
+    cost_score_fn: Callable[[Candidate], float] | None = None,
 ) -> list[Candidate]:
     scored = [
-        (score_candidate(c, required_capabilities, state, weights), c)
+        (score_candidate(c, required_capabilities, state, weights, cost_score_fn), c)
         for c in candidates
     ]
     eligible = [(s, c) for s, c in scored if s >= 0]

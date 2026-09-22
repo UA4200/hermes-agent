@@ -1,0 +1,65 @@
+{
+  "policy_version": "enterprise_alusi_v2_cost_optimized",
+  "tiers": {
+    "local":   { "provider": "ollama",  "model": "llama3.2:3b",                  "cost_per_call": 0.0,    "cost_per_1k_tokens": 0.0 },
+    "haiku":   { "provider": "haiku",   "model": "claude-haiku-4-5",              "cost_per_call": 0.001,  "cost_per_1k_tokens": { "input": 0.00025, "output": 0.00125 } },
+    "sonnet":  { "provider": "sonnet",  "model": "claude-sonnet-4-5",             "cost_per_call": 0.005,  "cost_per_1k_tokens": { "input": 0.003,   "output": 0.015 } },
+    "opus":    { "provider": "opus",    "model": "claude-opus-4-5",               "cost_per_call": 0.075,  "cost_per_1k_tokens": { "input": 0.015,   "output": 0.075 } },
+    "gpt":     { "provider": "gpt",     "model": "gpt-4o-mini",                   "cost_per_call": 0.003,  "cost_per_1k_tokens": { "input": 0.00015, "output": 0.0006 } },
+    "gpt4o":   { "provider": "gpt4o",   "model": "gpt-4o",                        "cost_per_call": 0.03,   "cost_per_1k_tokens": { "input": 0.005,   "output": 0.015 } }
+  },
+  "chains": {
+    "local_only":   ["local"],
+    "local_first":  ["local", "haiku", "gpt"],
+    "haiku_first":  ["haiku", "local", "gpt"],
+    "standard":     ["haiku", "gpt", "local"],
+    "high_value":   ["sonnet", "haiku", "gpt"],
+    "paramount":    ["opus", "sonnet", "haiku"],
+    "cashclaw":     ["opus", "sonnet"],
+    "cheap":        ["local", "haiku"],
+    "ollama_first": ["local", "haiku"],
+    "pmo_analysis": ["local", "haiku", "sonnet"],
+    "task_decomp":  ["local", "haiku"]
+  },
+  "mapping": {
+    "heartbeat":            "local_only",
+    "health_check":         "local_only",
+    "system_status":        "local_only",
+    "coordination":         "cheap",
+    "log_summary":          "cheap",
+    "lead_scoring":         "haiku_first",
+    "humanize":             "standard",
+    "ats_optimize":         "standard",
+    "outreach":             "standard",
+    "enrichment":           "standard",
+    "research":             "high_value",
+    "architecture":         "high_value",
+    "deal_strategy":        "cashclaw",
+    "critical_reasoning":   "paramount",
+    "security_scan":        "high_value",
+    "signal_analysis":      "ollama_first",
+    "trade_execution":      "ollama_first",
+    "task_decomposition":   "task_decomp",
+    "pmo_council":          "pmo_analysis",
+    "cost_analysis":        "cheap",
+    "briefing":             "cheap",
+    "monitoring":           "local_only",
+    "cron_task":            "local_only"
+  },
+  "models": {
+    "opus":   "claude-opus-4-5",
+    "sonnet": "claude-sonnet-4-5",
+    "haiku":  "claude-haiku-4-5",
+    "gpt":    "gpt-4o-mini",
+    "gpt4o":  "gpt-4o",
+    "ollama": "llama3.2:3b"
+  },
+  "ollama_url": "http://127.0.0.1:11434",
+  "external_send_requires_approval": true,
+  "no_hidden_bypass_routes": true,
+  "cost_limits": {
+    "daily_hard_limit_usd": 10.0,
+    "per_call_opus_limit_usd": 0.50,
+    "heartbeat_allowed_providers": ["local"]
+  }
+}
