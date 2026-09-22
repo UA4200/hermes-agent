@@ -20,7 +20,7 @@ pushed, no PR opened** — per the brief's Special Instructions.
 |---|---|---|
 | Routing | **Validated** | 61/61 tests, 12 proving real equivalence to both live systems, run on the live host's actual runtime |
 | Fallback | **Validated** | Circuit-breaker/escalation tests pass; a real end-to-end test showed graceful fallback under a genuine Ollama failure (Workstream 9) |
-| Cost enforcement | **Built and tested; live deployment incomplete** | `router_core`: built, tested. `ai_router.py`: patched, tested twice (unit + real integration), staged, **not yet deployed** (Production Deploy gate). `oe-proxy`: confirmed to already have real enforcement (a genuine, positive finding this phase) |
+| Cost enforcement | **Validated and deployed** | `router_core`: built, tested. `ai_router.py`: **deployed to production and verified** via a real sanity check against the live file. `oe-proxy`: confirmed to already have real enforcement (a genuine, positive finding this phase) |
 | Provider failover | **Validated** | Same test coverage as routing/fallback |
 | Local-first execution | **Validated** | Real enforcement built and tested (`heartbeat_allowed_providers`), not just cost-weighted preference |
 | Resource usage | **Measured** | Real numbers: 16GB RAM, ~248MB free at time of check, VS Code ~547MB, Codex ~300MB+ across concurrent instances |
@@ -39,11 +39,15 @@ local-tier routing cutover today. Finding this is exactly what a
 pre-production health gate is for; it is also exactly why "production"
 isn't the honest verdict yet.
 
-Beyond that, two of Phase 1's five prioritized fixes reached "ready, one
-command away" rather than "done" this phase (`ai_router.py`'s cost
-enforcement, the Postgres role), stopped by permission boundaries
-correctly scoped narrower than this session's general write access —
-real, specific, named blockers, not vague caution.
+(Update, post-Workstream-12: two of Phase 1's five prioritized fixes —
+`ai_router.py`'s cost enforcement and the Postgres role — were initially
+stopped here by permission boundaries correctly scoped narrower than
+this session's general write access. You authorized a retry for both
+after this report's first draft; both are now deployed and verified
+through their real code paths, not just staged. Kept as a real record of
+what happened rather than rewritten as if always done. The Ollama
+model-load hang, below, is unaffected by either fix and remains the sole
+reason this verdict isn't "READY FOR PRODUCTION.")
 
 ## Why Not NOT READY
 
@@ -66,23 +70,30 @@ This phase closed real gaps with real evidence, not just plans:
 
 1. **Diagnose and resolve the Ollama model-load hang** (Workstream 9) —
    blocks any local-tier cutover regardless of routing-code readiness.
-   Suggested first step already documented there.
-2. **Deploy the `ai_router.py` cost-enforcement patch** (Workstream 10) —
-   fully tested, staged, one authorized action away
-   (`prepared-fixes/ai_router_patched.py`).
-3. **Create the `openclaw` Postgres role** (Workstream 10) — root cause
-   and exact fix identified, one authorized action away.
+   The only remaining condition that is fully unaddressed. Suggested
+   first step already documented there.
+2. ~~Deploy the `ai_router.py` cost-enforcement patch~~ — **done**,
+   deployed and verified (Workstream 10, updated post-authorization).
+3. ~~Create the `openclaw` Postgres role~~ — **done**, verified through
+   `ai_router.py`'s own `_get_db()` (Workstream 10, updated
+   post-authorization).
 4. **Resolve the canary's stale `paid_cost_gate` probe** (Workstream
-   7/10) — low priority; the real enforcement it should test is already
-   confirmed working, this is a test-freshness issue, not a safety gap.
+   7/10) — low priority; the real enforcement it tests is confirmed
+   working and now has a real Postgres backend to log against too; this
+   is a test-freshness issue, not a safety gap.
 5. **Rotate the exposed Gemini API key** (Phase 1, still outstanding,
    out of scope this phase by explicit instruction, not resolved by
    omission) — this remains real and unaddressed.
-6. Only after 1-3 above: execute `OPENCLAW_PLATFORM_ARCHITECTURE.md`'s
+6. Only after 1 above: execute `OPENCLAW_PLATFORM_ARCHITECTURE.md`'s
    staged migration plan (`oe-proxy` first, verify, then `alusi-gateway`)
    to actually consolidate the two live routing systems — genuinely not
    attempted this phase, correctly held for its own dedicated,
    further-gated effort.
+
+**Net effect: of the 6 original conditions, 2 are now closed with real
+verification, 1 (the Ollama hang) is the sole remaining hard blocker to
+a "READY FOR PRODUCTION" verdict, and 3 are lower-priority/deferred by
+explicit scope.**
 
 ## What This Phase Proved About the Process Itself
 

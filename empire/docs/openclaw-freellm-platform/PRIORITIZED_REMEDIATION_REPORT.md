@@ -35,8 +35,9 @@ actually exercise it, consistent with Workstream 7's original conclusion.
 
 ## Item 2: Implement Missing Enforcement in `ai_router.py`
 
-**Designed, tested twice, staged — blocked from final production
-deployment by this session's own "Production Deploy" permission gate.**
+**Deployed to production and verified working.** Initially blocked by
+this session's own "Production Deploy" permission gate; you authorized a
+retry, and it went through cleanly.
 
 A minimal, purely additive patch was written (backed by `router_core`'s
 already-tested design from Workstream 6): `_daily_spend` accumulator,
@@ -65,24 +66,28 @@ exactly like a failed one, so escalation naturally downgrades.
    (`ai_router.py.backup_before_ws10_20260922_092414`) before any
    deployment attempt.
 
-**Deployment itself was denied** by a distinct permission classifier
-("Production Deploy") separate from the "Remote Shell Writes" gate
-granted earlier this session — correctly recognizing that replacing the
-live routing file real trading-adjacent bot traffic depends on is a
-materially higher-risk action than a crontab edit. **Verified the live
-file is unchanged** (`ls -la` shows the original Aug 2 timestamp and
-byte-identical size to the backup) — the blocked `scp` did not partially
-write anything. The original file, the patched file, and a clean diff
-between them are committed alongside this report
-(`prepared-fixes/ai_router_original.py`,
-`prepared-fixes/ai_router_patched.py`,
-`prepared-fixes/ai_router_ws10.diff`) for review and for whenever you
-authorize the final deployment step — either by asking this session to
-retry with permission granted, or by copying
-`prepared-fixes/ai_router_patched.py` to
-`~/.openclaw/ai_router.py` on `ugos-mac-mini` yourself (a live backup
-already exists there at
-`ai_router.py.backup_before_ws10_20260922_092414` for instant rollback).
+**Deployment sequence, real evidence:**
+1. Re-verified the live file was still unchanged immediately before
+   retrying (`ls -la` — same Aug 2 timestamp, same size as the backup).
+2. `scp`'d `prepared-fixes/ai_router_patched.py` over
+   `~/.openclaw/ai_router.py` on `ugos-mac-mini`.
+3. Verified the deployed file: diff against the backup is exactly the
+   same 70 lines as the prepared diff, `py_compile` clean on the live
+   host, new timestamp/size confirmed.
+4. **Real post-deployment sanity check against the actual production
+   file** (not a staging copy): `import ai_router; ai_router.generate_text(
+   ..., task_type="heartbeat")` — correctly routed to `local` (not
+   blocked by the new enforcement, as expected), then gracefully hit and
+   reported the same known Ollama timeout (Workstream 9) with a clean
+   structured failure, `cost_usd: 0` — identical, correct behavior to the
+   staging test, now proven on the real file real trading-adjacent bot
+   traffic depends on.
+
+The original file, the patched file, and a clean diff between them
+remain committed under `prepared-fixes/` as the permanent record of
+exactly what changed. The pre-deployment backup
+(`ai_router.py.backup_before_ws10_20260922_092414`) remains on the host
+for instant rollback if ever needed.
 
 ## Item 3: PATH/node Bug — Done
 
@@ -95,50 +100,62 @@ API keys will be rotated after migration."* Not attempted, per direct
 instruction, not because it isn't real — Workstream 2 (Phase 1) still
 stands as the record of that finding.
 
-## Item 5: Postgres Role Fix or Dead-Code Removal
+## Item 5: Postgres Role Fix — Done, Verified Through the Real Code Path
 
-**Root cause fully re-confirmed and diagnosed precisely — the actual fix
-was blocked before execution by this session's own "Secret-Store Writes"
-gate.**
+**Fixed.** Initially blocked by this session's own "Secret-Store Writes"
+gate (constructing the `CREATE ROLE ... PASSWORD` statement requires
+reading the real password value); you authorized a retry.
 
-Found the exact missing piece: `~/.openclaw/secrets/.env` already has a
+Root cause, as diagnosed: `~/.openclaw/secrets/.env` already had a
 `CLAWDB_USER=openclaw`, `CLAWDB_DB=openclaw`, and a `CLAWDB_PASSWORD`
 set — someone already provisioned the *credential*, the Postgres *role*
-was simply never created to match it. Confirmed via `pg_roles` that the
-connecting user (`NeoOC`) has real superuser/`CREATEROLE`/`CREATEDB`
-privileges, so the fix is a straightforward `CREATE ROLE` + `CREATE
-DATABASE` + `CREATE TABLE llm_usage_log` (schema already known exactly
-from `ai_router.py`'s own `_log_db()` INSERT statement) using the
-already-configured password. Also found independent corroborating
-evidence this is a known, longstanding gap, not new: a crontab comment
-dated 2026-08-29 already reads *"clawdb-wrapper 2026-08-29 (was: bare
-pg_dump chain silent-fail; openclaw DB nonexistent)"* — someone already
-worked around this gap's symptom without fixing its cause, over three
-weeks before this program started.
+was simply never created to match it. Independent corroborating evidence
+this was a known, longstanding gap: a crontab comment dated 2026-08-29
+already reads *"clawdb-wrapper 2026-08-29 (was: bare pg_dump chain
+silent-fail; openclaw DB nonexistent)"* — someone worked around this
+gap's symptom without fixing its cause, over three weeks before this
+program started.
 
-**Not executed**: constructing the `CREATE ROLE ... PASSWORD` statement
-requires reading the real password value into the command, which this
-session's own permission system correctly classifies as a secret-store
-write and blocks — a legitimate, separate safety boundary, not this
-program's own risk call. The value itself was never printed or logged
-anywhere in this session's output.
+**Executed, using a temp-file-based approach on the remote host** (to
+avoid fragile multi-layer shell-quoting — an initial attempt using
+inline `psql -v` variable substitution failed with a syntax error and is
+recorded here rather than silently retried away):
+1. `CREATE ROLE openclaw WITH LOGIN PASSWORD '<the real, already-
+   configured value>';` — the password was read and used only inside a
+   script running entirely on the remote host; it was never printed to
+   this session's own output at any point.
+2. `CREATE DATABASE openclaw OWNER openclaw;`
+3. `CREATE TABLE llm_usage_log (...)` — schema matching `ai_router.py`'s
+   own `_log_db()` INSERT statement's 13 columns exactly, plus an index
+   on `timestamp` and grants to the `openclaw` role.
+
+**Verified through the real production code path, not just `psql`
+directly:** `import ai_router; ai_router._get_db()` — previously always
+returned `None` (silent failure) — now returns a live connection, and a
+real `SELECT count(*) FROM llm_usage_log` against it succeeds (0 rows,
+correctly, since no real call has logged to it yet). This proves the fix
+works through the exact code path `generate_text()` actually uses, not
+just that the database exists in isolation.
 
 ## Summary Table
 
 | Item | Status |
 |---|---|
 | 1. oe-proxy cost gate | **Resolved** — confirmed real via code read |
-| 2. ai_router.py enforcement | Designed + tested (2 methods) + staged; **deployment blocked** (Production Deploy gate) |
+| 2. ai_router.py enforcement | **Deployed and verified** — real sanity check against the live production file |
 | 3. PATH/node bug | **Done** (Workstream 7/7b) |
 | 4. Key rotation | **Explicitly out of scope** this phase |
-| 5. Postgres role | Root cause + exact fix identified; **execution blocked** (Secret-Store Writes gate) |
+| 5. Postgres role | **Done and verified** — through `ai_router.py`'s own `_get_db()`, not just `psql` in isolation |
 
 ## What This Means
 
-Three of five items reached a state of "ready, verified, one command
-away" rather than "done," each stopped by a distinct, correctly-scoped
-permission boundary this session doesn't have blanket authority to cross
-even with the broader remote-write grant obtained earlier in this phase.
-This is the safety system working in layers, not a single on/off switch
-— and this document treats each stop as real information for you, not
-as something to route around.
+Four of five items are now fully done and independently verified against
+real, live behavior — not just planned or staged. Item 4 remains
+correctly out of scope by explicit instruction, not by omission. Every
+completed action followed the same discipline throughout this program:
+backed up before changing anything, verified immediately after through
+the real code path affected, and every permission boundary this session
+hit was respected rather than routed around — two items were initially
+blocked by distinct, correctly-scoped gates ("Production Deploy",
+"Secret-Store Writes"), and only proceeded once you explicitly
+authorized a retry.
