@@ -1,0 +1,70 @@
+112a113,153
+> # ── Cost limit enforcement ──────────────────────────────────────────────────
+> # Added Phase 2 Workstream 10 remediation (priority item #2 from the prior
+> # program's FINAL_PRODUCT_REPORT.md): model_policy.json's cost_limits
+> # (daily_hard_limit_usd, per_call_opus_limit_usd, heartbeat_allowed_providers)
+> # were declared but never checked anywhere in this file. This section closes
+> # that gap with the minimum needed to enforce what's already declared --
+> # not a redesign. In-memory only (resets on process restart), same design
+> # choice already used elsewhere in this system's own routers.
+> _daily_spend: dict[str, float] = {}
+> 
+> def _today_str() -> str:
+>     return datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
+> 
+> def _daily_spent() -> float:
+>     return _daily_spend.get(_today_str(), 0.0)
+> 
+> def _record_spend(cost_usd: float) -> None:
+>     day = _today_str()
+>     _daily_spend[day] = _daily_spend.get(day, 0.0) + cost_usd
+> 
+> def _budget_block_reason(task_type: str, tier_name: str, estimated_cost_usd: float) -> str | None:
+>     """Returns a reason string if this call should be blocked, else None.
+>     Reads limits from the live policy file itself -- if cost_limits is
+>     absent or a specific field is unset, that check is simply skipped
+>     (fail-open on missing config, not fail-closed on a KeyError)."""
+>     limits = policy().get("cost_limits", {})
+> 
+>     allowed = limits.get("heartbeat_allowed_providers")
+>     if task_type == "heartbeat" and allowed and tier_name not in allowed:
+>         return f"heartbeat_allowed_providers_blocked_tier:{tier_name}"
+> 
+>     per_call_opus = limits.get("per_call_opus_limit_usd")
+>     if tier_name == "opus" and per_call_opus is not None and estimated_cost_usd > per_call_opus:
+>         return f"per_call_opus_limit_exceeded:{estimated_cost_usd}>{per_call_opus}"
+> 
+>     daily_limit = limits.get("daily_hard_limit_usd")
+>     if daily_limit is not None and _daily_spent() + estimated_cost_usd > daily_limit:
+>         return f"daily_hard_limit_would_be_exceeded:{_daily_spent()}+{estimated_cost_usd}>{daily_limit}"
+> 
+>     return None
+> 
+227a269,293
+> 
+>         # Cost limit enforcement (Phase 2 Workstream 10) -- a blocked tier
+>         # is skipped exactly like a failed one, so the existing chain
+>         # naturally falls through to the next (cheaper/local) tier. This
+>         # is real enforcement of fields the policy already declares, not
+>         # new policy.
+>         _est_cost = _cost_per_tokens(tier_name, _estimate_tokens(prompt), max_tokens)
+>         _block_reason = _budget_block_reason(task_type, tier_name, _est_cost)
+>         if _block_reason:
+>             errors[tier_name] = _block_reason
+>             escalated_from = tier_name
+>             _log({
+>                 "status": "budget_blocked",
+>                 "agent": agent,
+>                 "task_type": task_type,
+>                 "chain_key": chain_key,
+>                 "tier": tier_name,
+>                 "provider": provider_name,
+>                 "cost_usd": 0.0,
+>                 "success": False,
+>                 "latency_ms": 0,
+>                 "error": _block_reason,
+>             })
+>             continue
+> 
+237a304
+>             _record_spend(cost)  # Phase 2 Workstream 10: real spend, not estimated
