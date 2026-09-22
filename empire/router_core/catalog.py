@@ -65,6 +65,46 @@ PROVIDER_CAPS: dict[str, frozenset[str]] = {
     "anthropic/claude-opus-4-5":   frozenset({"text", "json", "code", "reasoning", "tools", "long_context", "critical"}),
 }
 
+# ── Phase 2 Workstream 4 additions ──────────────────────────────────────────
+# The brief asks router_core to support Claude/Codex/Hermes/Gemma/Qwen/
+# DeepSeek/Llama/Mistral/future providers. Two real gaps found while doing
+# this, both worth stating plainly rather than silently patching over:
+#
+# 1. gemma2:2b and phi3:mini ARE installed locally on ugos-mac-mini
+#    (confirmed live, `ollama list`, Workstream 3 this phase) but have NO
+#    PROVIDER_CAPS entry in adaptive_router.py's real catalog -- they are
+#    installed but never declared as routable candidates on the live
+#    host. Added here, not on the live host (this module doesn't touch
+#    ugos-mac-mini).
+# 2. DeepSeek and Codex/OpenAI-Codex have no entry anywhere in either
+#    live system (grepped both full source files this session -- zero
+#    matches). These are genuinely new additions per the brief's "Future
+#    providers" framing, not ported from anywhere.
+EXTENDED_PROVIDER_CAPS: dict[str, frozenset[str]] = {
+    # Installed-but-undeclared local model (gap found this workstream) --
+    # phi3:mini is also installed but already has a real PROVIDER_CAPS
+    # entry, so it doesn't need one here too.
+    "ollama/gemma2:2b":  frozenset({"text", "json"}),
+    # Not currently installed anywhere in this system -- capability
+    # declarations only, so the platform is configuration-ready the
+    # moment a real model/credential shows up, per "policy-driven,
+    # configuration-driven... no provider-specific logic inside
+    # products." Sizes/tags per EL-003's same-day research (a separate,
+    # unrelated sandbox program that did live model research this
+    # session) -- not independently re-verified against ollama.com here.
+    "ollama/deepseek-r1:8b":        frozenset({"text", "json", "code", "reasoning", "long_context"}),
+    "ollama/qwen2.5-coder:7b":      frozenset({"text", "json", "code"}),
+    "ollama/gemma3:4b":             frozenset({"text", "json", "long_context"}),
+    # Codex CLI is OpenAI-backed (Workstream 3, this phase) -- modeled
+    # as an OpenAI-family capability, not a new provider namespace,
+    # since it's the same API surface as the existing openai/* entries.
+    "openai/gpt-5-codex":           frozenset({"text", "json", "code", "reasoning", "tools", "long_context"}),
+}
+
+# Merged view used by callers that want "everything this catalog knows
+# about" without caring which addition wave a declaration came from.
+ALL_PROVIDER_CAPS: dict[str, frozenset[str]] = {**PROVIDER_CAPS, **EXTENDED_PROVIDER_CAPS}
+
 # ── Cost table, USD per 1M tokens (in, out) -- verbatim ─────────────────────
 COST_TABLE: dict[str, tuple[float, float]] = {
     "groq":       (0.00, 0.00),
@@ -161,3 +201,50 @@ def real_alusi_candidates() -> list[Candidate]:
         caps = PROVIDER_CAPS.get(key, frozenset({"text"}))
         candidates.append(Candidate(provider, model, is_free=provider in FREE_PROVIDERS, capabilities=caps))
     return candidates
+
+
+# ── Locally-installed Ollama models, gap-filled (Workstream 4, Phase 2) ──
+# All 6 models actually present via `ollama list` on ugos-mac-mini
+# (Workstream 3, this phase), including the 2 (gemma2:2b, phi3:mini)
+# the live system's own PROVIDER_CAPS never declared -- so this function
+# reflects what's really installed, not just what the live system
+# currently routes to (that's real_alusi_candidates, above, deliberately
+# left unchanged as the live-fidelity reference).
+INSTALLED_OLLAMA_MODELS: list[str] = [
+    "qwen2.5:3b", "qwen2.5:1.5b", "tinyllama:latest",
+    "gemma2:2b", "phi3:mini", "llama3.2:3b",
+]
+
+
+def installed_ollama_candidates() -> list[Candidate]:
+    """Every model `ollama list` actually shows on ugos-mac-mini
+    (Workstream 3, live-checked), with capabilities filled in from
+    ALL_PROVIDER_CAPS -- proves the real installed-but-undeclared gap is
+    closed in router_core's view, without touching the live host's own
+    (unchanged) PROVIDER_CAPS."""
+    candidates = []
+    for model in INSTALLED_OLLAMA_MODELS:
+        key = f"ollama/{model}"
+        caps = ALL_PROVIDER_CAPS.get(key, frozenset({"text"}))
+        candidates.append(Candidate("ollama", model, is_free=True, capabilities=caps))
+    return candidates
+
+
+def future_provider_candidates() -> list[Candidate]:
+    """Capability-declared-but-not-installed candidates (DeepSeek,
+    Qwen2.5-Coder, Gemma 3, Codex/GPT-5) -- per the brief's "Future
+    providers" framing. These score as normal Candidates the moment a
+    real caller is registered for them; nothing here assumes they're
+    live today. Deliberately excludes Codex from is_free=True: it's an
+    OpenAI-family model, priced like the existing openai/* entries, not
+    a zero-cost local addition."""
+    return [
+        Candidate("ollama", "deepseek-r1:8b", is_free=True,
+                   capabilities=ALL_PROVIDER_CAPS["ollama/deepseek-r1:8b"]),
+        Candidate("ollama", "qwen2.5-coder:7b", is_free=True,
+                   capabilities=ALL_PROVIDER_CAPS["ollama/qwen2.5-coder:7b"]),
+        Candidate("ollama", "gemma3:4b", is_free=True,
+                   capabilities=ALL_PROVIDER_CAPS["ollama/gemma3:4b"]),
+        Candidate("openai", "gpt-5-codex", is_free=False,
+                   capabilities=ALL_PROVIDER_CAPS["openai/gpt-5-codex"]),
+    ]
