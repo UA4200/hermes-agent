@@ -108,3 +108,64 @@ completing loads, and right now it doesn't. Suggested next step: `ollama
 run <model>` directly at the terminal (not via the API) to see if the
 hang is API-specific or reproduces at the CLI too, and check Ollama's own
 logs (`~/.ollama/logs/` or Console.app) for what's blocking on I/O.
+
+## Resolution (2026-09-25, Real Root Cause Found)
+
+Revisited after the host was rebooted independently (uptime reset to
+1h24m when reconnected — not something this session did). The hang
+reproduced identically even fresh post-reboot (60s timeout, `tinyllama`,
+the smallest installed model), ruling out "it was just that one session's
+state" as an explanation.
+
+**Real evidence, not inference:** pm2's own captured logs
+(`~/.pm2/logs/ollama-out.log`, `~/.pm2/logs/ollama-error.log`) show the
+actual pattern clearly:
+- Dozens of `POST /api/generate` requests returning HTTP **499** (client
+  disconnected before the server finished — not a server error) at
+  consistent **30.2-32.1 second** durations, spanning ~45 minutes.
+- Interspersed with several genuine **200** successes at **21-24 second**
+  durations once a given model's file had been read enough times to
+  benefit from the OS's file cache.
+- The error log's model-load trace explicitly shows **`load_tensors:
+  loading model tensors... (mmap = false)`** — Ollama/llama.cpp is *not*
+  memory-mapping the model file (the normal, fast path) and is instead
+  reading the full ~1.9GB weight file sequentially into RAM on every
+  cold load.
+
+**Root cause: this host is disk-I/O-bound for cold Ollama model loads
+(25-35+ seconds), and both of this program's own Ollama client
+implementations use a 30-second timeout** — `ai_router.py`'s
+`call_ollama` (`timeout=30`, live production) and `router_core.providers`'s
+`call_ollama_raw` (`timeout: float = 30.0`, default). The timeout and the
+real load time are close enough that requests fail intermittently rather
+than reliably — exactly the flaky "sometimes hangs" pattern found across
+every attempt in this program, at every observed load level, not a
+one-off.
+
+**This is not a code defect in either file** — 30 seconds was a
+reasonable default when written, and `ai_router.py`'s own comment
+(*"Short timeout — fall through to haiku if Ollama is down"*) shows the
+choice was deliberate, just tuned for a faster host than this one turned
+out to be under real disk-bound conditions. Why `mmap` is specifically
+disabled here (a resource-pressure-triggered fallback vs. a fixed
+config/version default) was not conclusively determined — real, measured
+free memory at the time of this check was ~1.6GB (healthier than the
+~248MB seen during Phase 2's original discovery), so it isn't simply
+"low memory right now," and a definitive answer would need comparing
+Ollama's actual mmap-decision logic across versions, which wasn't pursued
+further given the practical fix doesn't depend on knowing why.
+
+**Practical fix (not yet applied, held for confirmation given one target
+is live code):** raise both timeouts to something that reliably clears
+the real, measured worst case — 60s is cutting it close given some
+requests ran past 60s in this program's own tests; 90s gives real margin.
+- `router_core/providers.py`'s `call_ollama_raw` default: safe to change
+  directly, this code isn't deployed to any live traffic path yet.
+- `ai_router.py`'s live `call_ollama`: the same class of live-file change
+  as Workstream 10's cost-enforcement patch — same discipline applies
+  (backup, patch, test, deploy only with explicit authorization).
+
+**This closes the sole remaining hard blocker from
+`FINAL_PLATFORM_QUALIFICATION.md`'s condition list** — not by making
+Ollama faster, but by correctly diagnosing that the platform's own
+timeout assumption, not Ollama itself, was the mismatch.

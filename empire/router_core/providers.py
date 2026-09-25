@@ -75,13 +75,22 @@ def call_freeway_raw(
 
 def call_ollama_raw(
     model: str, prompt: str, *, max_tokens: int = 500,
-    base_url: str = "http://127.0.0.1:11434", timeout: float = 30.0,
+    base_url: str = "http://127.0.0.1:11434", timeout: float = 90.0,
 ) -> dict:
     """Calls Ollama's native /api/generate -- ported from
     adaptive_router.py's call_ollama (which builds a flattened
     role-prefixed prompt itself; this version accepts a pre-built prompt
     string, leaving message-formatting to the caller, matching
-    router_core's simpler (model, prompt) shape)."""
+    router_core's simpler (model, prompt) shape).
+
+    Default timeout raised from 30.0 to 90.0 (Phase 2 Workstream 9
+    follow-up, 2026-09-25): real measured cold-start model loads on the
+    reference deployment host take 25-35+ seconds (pm2's own captured
+    Ollama logs show HTTP 499s -- client gave up, not a server error --
+    at consistent 30.2-32.1s, caused by mmap=false forcing a full
+    sequential disk read of the model weights on every cold load). 30s
+    was too tight a margin against that real worst case; 90s clears it
+    with real headroom rather than just barely covering the median."""
     body = json.dumps({"model": model, "prompt": prompt, "stream": False,
                         "options": {"num_predict": max_tokens}}).encode()
     req = urllib.request.Request(f"{base_url}/api/generate", data=body, method="POST",
