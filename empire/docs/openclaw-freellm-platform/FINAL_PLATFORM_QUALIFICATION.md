@@ -68,10 +68,19 @@ This phase closed real gaps with real evidence, not just plans:
 
 ## The Conditions, In Priority Order
 
-1. **Diagnose and resolve the Ollama model-load hang** (Workstream 9) —
-   blocks any local-tier cutover regardless of routing-code readiness.
-   The only remaining condition that is fully unaddressed. Suggested
-   first step already documented there.
+1. ~~Diagnose and resolve the Ollama model-load hang~~ — **diagnosed and
+   substantially mitigated, not perfectly eliminated.** Root cause found
+   via pm2's own logs: `mmap=false` forces slow (25-35s+) cold model
+   loads, colliding with both Ollama client implementations' 30s
+   timeout. Fixed by raising the timeout to 90s in both `router_core` and
+   (you authorized, deployed and verified) the live `ai_router.py`. Real
+   post-deployment tests: warm-model calls succeed reliably at 10-25s;
+   one genuinely cold-start call still failed at ~105s, since
+   `heartbeat`'s `local_only` chain has no fallback tier by design. See
+   `ROUTER_CORE_DEPLOYMENT.md`'s live results section for the honest,
+   not-oversold account. A residual, narrow risk (true cold start on a
+   no-fallback chain) remains and would need a warm-up mechanism to close
+   further, not attempted here.
 2. ~~Deploy the `ai_router.py` cost-enforcement patch~~ — **done**,
    deployed and verified (Workstream 10, updated post-authorization).
 3. ~~Create the `openclaw` Postgres role~~ — **done**, verified through
@@ -91,10 +100,16 @@ This phase closed real gaps with real evidence, not just plans:
    attempted this phase, correctly held for its own dedicated,
    further-gated effort.
 
-**Net effect: of the 6 original conditions, 3 are now closed with real
-verification, 1 (the Ollama hang) is the sole remaining hard blocker to
-a "READY FOR PRODUCTION" verdict, and 2 are lower-priority/deferred by
-explicit scope.**
+**Net effect (updated 2026-09-25): of the 6 original conditions, 3 are
+fully closed with real verification, 1 (the Ollama hang) is
+substantially mitigated with one honestly-documented narrow residual
+risk, and 2 remain — the key rotation (a real, live, unaddressed
+exposure, not resolved by its out-of-scope status) and the staged
+router consolidation (deliberately deferred to its own effort). The
+verdict stays READY WITH CONDITIONS, not READY FOR PRODUCTION, on the
+strength of the still-live exposed credential alone — everything else
+that was a genuine platform defect at the start of this phase is now
+closed or substantially reduced.**
 
 ## What This Phase Proved About the Process Itself
 

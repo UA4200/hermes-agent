@@ -169,3 +169,34 @@ requests ran past 60s in this program's own tests; 90s gives real margin.
 `FINAL_PLATFORM_QUALIFICATION.md`'s condition list** — not by making
 Ollama faster, but by correctly diagnosing that the platform's own
 timeout assumption, not Ollama itself, was the mismatch.
+
+## Live Deployment and Real Test Results (2026-09-25, You Authorized)
+
+The `ai_router.py` side of this fix (`timeout=30` → `90`) was deployed
+following the same discipline as Workstream 10's cost-enforcement patch:
+re-verified the live file was unchanged immediately before patching,
+backed up (`ai_router.py.backup_before_ws16_20260925_132519`), deployed,
+diff-verified against the backup as exactly the intended 5-line change,
+`py_compile` clean on the live host.
+
+**Real test results, honestly mixed, not oversold:**
+- First real call after deployment: **failed** — took 104.76s wall-clock
+  (past even the new 90s internal timeout plus request overhead) on a
+  genuinely cold load, and `heartbeat`'s `local_only` chain has no
+  fallback tier by design, so a cold-start miss there fails outright
+  rather than escalating.
+- Two subsequent calls: **succeeded**, at 24.4s and 9.8s — once the model
+  is warm (resident in Ollama's memory, per its `OLLAMA_KEEP_ALIVE`
+  default), responses are fast and comfortably within the new timeout.
+
+**Honest conclusion:** the fix is real progress, not a perfect
+guarantee. It correctly handles the common case (warm model, 10-25s
+responses) and turns the previously-unbounded/unpredictable failure mode
+into a bounded one (a genuinely cold load can still occasionally exceed
+90s and fail cleanly, rather than hanging indefinitely as before). The
+remaining risk is specific and narrow: a `local_only`-chain task type
+(by design, no fallback) hitting a true cold start. Mitigating that
+further would mean a warm-up mechanism (e.g., a lightweight periodic
+ping keeping the model resident) rather than a still-larger timeout,
+which was not built or requested here — flagged as a real, specific
+follow-up if this residual risk matters enough to close further.
