@@ -1,21 +1,22 @@
 # Career Automation Engine
 
-Playwright + Notion job-application automation with a human approval
-gate, built from Nathan's handoff package (`README_AUTOMATION_PACKAGE.md`,
+Playwright job-application automation with a human approval gate,
+built from Nathan's handoff package (`README_AUTOMATION_PACKAGE.md`,
 `CLAUDE_CODE_HANDOFF.md`, `SETUP.md`, `IMPLEMENTATION_CHECKLIST.md`,
 `JOB_BOARDS.md`).
 
-Tracker: [Career Application Engine](https://app.notion.com/p/3e480c2d70db4f2b9b7934c2d8be7d92)
-(a Notion database, swapped in for the original spec's Google Sheet —
-see below for why).
+Tracker: a plain CSV file (`TRACKER_PATH` in `.env`, defaults to
+`data/tracker.csv`) — point it at a folder Google Drive for Desktop
+syncs and the tracker shows up in Drive/your phone with zero API setup.
+This has gone through two earlier backends (Google Sheets, then
+Notion) before landing here — see below for why each got replaced.
 
 ## Status: code complete, NOT run or verified yet
 
 This was built and pushed from a cloud Claude Code session, which cannot
 run the actual system — there's no local browser, no persistent server
 reachable at `localhost:3000`, and no real credentials (Claude API key,
-Notion integration token, Indeed session cookie) available to it. Every
-file below exists and is internally consistent, but **Phases 2–4 of
+Indeed session cookie) available to it. Every file below exists and is internally consistent, but **Phases 2–4 of
 `IMPLEMENTATION_CHECKLIST.md` (scoring, dashboard, end-to-end submit)
 have not been executed against a live target.** Run it yourself per
 "Run it" below, and treat the first cycle as a real test, not a
@@ -36,15 +37,17 @@ CDN crawl4ai's browser needs, so the HN thread lookup and the crawl
 itself have not been executed end-to-end here — that needs your machine
 too.
 
-The Notion tracker swap has a similar mix of verified/not: the database
-itself is real (created via the Notion API in this session, schema
-confirmed by reading it back), and `src/lib/notion.js` /
-`src/scripts/notion_client_lib.py` are written against Notion's
-documented 2025-09-03 data-source API (parent-by-`data_source_id`,
-`/v1/data_sources/{id}/query`, property value shapes) — but neither
-client has made a real authenticated request, since that needs your own
-integration token. Run `validate-config.js` first; if the Notion check
-fails, that's the thing to debug before anything else.
+The tracker backend has moved twice since this was first built — Google
+Sheets, then Notion, now a plain CSV file — each time per Nathan's
+direction, each time to cut setup friction (a Google Cloud service
+account, then a Notion integration token, now nothing at all). The CSV
+client (`src/lib/tracker.js` / `src/scripts/tracker_csv.py`) is plain
+file I/O with no external dependency, so there's nothing to
+authenticate and little that can go wrong beyond a bad path — run
+`validate-config.js` to confirm `TRACKER_PATH` is writable. Both the
+Node and Python clients were exercised directly in this session
+(`validate-config.js`'s connectivity check actually creates and reads
+the file), so this backend is more thoroughly verified than the rest.
 
 ## Real risk you're accepting
 
@@ -62,11 +65,18 @@ with `--include-linkedin` in `fetch-job-boards.py`.
 - **`.env` instead of `CONFIG.json`.** Secrets in a `.json` file in a
   git repo are one `git add .` away from a leak; `.env` is gitignored
   by default across this whole toolchain.
-- **Notion instead of Google Sheets.** Swapped in at Nathan's request —
-  a Google Cloud service account (project, enabled API, IAM, downloaded
-  JSON key) was more setup than the task needed. Notion needs one
-  integration token (created in Notion's own settings, no cloud console)
-  and sharing one database with it. See `SETUP.md` step 2.
+- **CSV file instead of Google Sheets, then Notion.** Each swap was at
+  Nathan's request, each time to cut setup weight further: Sheets
+  needed a Google Cloud service account (project, enabled API, IAM,
+  downloaded key); Notion needed one integration token and sharing a
+  database with it. A CSV file needs neither — it's just a file. Point
+  `TRACKER_PATH` at a folder Google Drive for Desktop syncs to get it
+  into Drive/your phone with no API involved at all. `src/lib/tracker.js`
+  / `src/scripts/tracker_csv.py` were both exercised directly in this
+  session, including cross-checking that a file written by one is read
+  correctly by the other (fields containing commas, quotes, and literal
+  newlines included) — real bugs in the first draft of the Node-side
+  CSV parser were caught this way and fixed, not just assumed away.
 - **Cross-process state via `state/current-job.json`.** The original
   pseudocode had `dashboard-server.js` and `job-processor.js` share an
   in-memory `currentJob` variable, but `SETUP.md` runs them as two
@@ -106,18 +116,18 @@ src/
     playwright-automation.js  Field detection/fill, screenshots, submit, confirmation capture
   scripts/
     fetch-job-boards.py     Indeed (Selenium+cookie), RemoteOK/JustJoinIT/WWR (public APIs), LinkedIn (opt-in), Hacker News "Who is hiring?" (crawl4ai + Claude extraction, opt-in via --source hackernews)
-    score-jobs.py            Claude API fit scoring -> Notion
-    notion_client_lib.py     Python Notion read/append/update
+    score-jobs.py            Claude API fit scoring -> CSV tracker
+    tracker_csv.py           Python CSV read/append/update
     validate-config.js       Preflight credential/connectivity checks
   lib/
-    config.js, logger.js, state.js, notion.js   Node-side shared helpers
+    config.js, logger.js, state.js, tracker.js   Node-side shared helpers
 ```
 
-## Tracker properties (Notion database)
+## Tracker fields (CSV)
 
-`Company (title) | Role | Source | URL | Posted | Salary | Fit Score |
-Resume Used | Form Type | Status | Submitted Date | Confirmation |
-Next Action`
+`id | company | role | source | url | posted | salary | fitScore |
+resumeUsed | formType | status | submittedDate | confirmationCode |
+nextAction`
 
 Status flows: `SCORED → FORM_FILLED → SUBMITTED` (or `REJECTED` /
 `ERROR`).

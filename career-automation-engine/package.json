@@ -1,7 +1,7 @@
 {
   "name": "career-automation-engine",
   "version": "1.0.0",
-  "description": "Playwright + Notion job-application automation with a human approval gate",
+  "description": "Playwright job-application automation with a human approval gate (tracked via a CSV file, optionally Drive-synced)",
   "private": true,
   "main": "src/dashboard-server.js",
   "engines": {

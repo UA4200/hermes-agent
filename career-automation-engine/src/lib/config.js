@@ -13,9 +13,11 @@ const config = {
     batchSize: Number(required('CLAUDE_BATCH_SIZE', '10')),
     fitThreshold: Number(required('FIT_THRESHOLD', '70')),
   },
-  notion: {
-    apiKey: required('NOTION_API_KEY'),
-    dataSourceId: required('NOTION_DATA_SOURCE_ID'),
+  tracker: {
+    // Point this at a folder Google Drive for Desktop syncs to get the
+    // tracker into Drive/your phone with zero API setup. Defaults to a
+    // local file in this project if unset.
+    path: path.resolve(process.cwd(), required('TRACKER_PATH', './data/tracker.csv')),
   },
   indeed: {
     sessionCookie: required('INDEED_SESSION_COOKIE'),

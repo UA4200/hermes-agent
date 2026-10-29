@@ -33,16 +33,17 @@ cp .env.example .env
 
 **Claude API key** — from console.anthropic.com.
 
-**Notion tracker** — the database itself already exists (created for
-this project — [Career Application Engine](https://app.notion.com/p/3e480c2d70db4f2b9b7934c2d8be7d92)),
-so this is just two steps:
-1. notion.so/my-integrations → New integration → give it any name →
-   copy its **Internal Integration Secret**
-2. Open the database link above → "..." menu (top right) → Connections
-   → add your integration
-3. Set `NOTION_API_KEY` in `.env` to the secret from step 1.
-   `NOTION_DATA_SOURCE_ID` in `.env.example` is already this project's
-   real tracker — leave it as-is unless you want a separate one.
+**Tracker (optional: Google Drive)** — the default `TRACKER_PATH` in
+`.env.example` (`./data/tracker.csv`) needs nothing — it just works.
+To get the tracker into real Google Drive and your phone with zero API
+setup:
+1. Install [Google Drive for Desktop](https://www.google.com/drive/download/) if you don't have it, and let it finish syncing
+2. Create a folder inside your synced Drive, e.g. "Career Application Engine"
+3. Set `TRACKER_PATH` in `.env` to a file inside that folder, e.g.
+   `~/Library/CloudStorage/GoogleDrive-you@gmail.com/My Drive/Career Application Engine/tracker.csv` (macOS)
+   or `G:\My Drive\Career Application Engine\tracker.csv` (Windows)
+
+Drive syncs the file automatically from there — no code involved.
 
 **Indeed session cookie** (needed for `fetch-job-boards.py --source indeed`):
 1. Sign into Indeed.com in Chrome
@@ -62,9 +63,9 @@ here and to `LINKEDIN_SESSION_COOKIE` if you choose to set that too.
 node src/scripts/validate-config.js
 ```
 
-Fix anything marked `✗` before moving on — in particular the Notion
-connection check, which will fail if the database hasn't been shared
-with your integration (step 2 above) even if the API key is valid.
+Fix anything marked `✗` before moving on — the tracker check will fail
+if `TRACKER_PATH`'s parent folder doesn't exist (e.g. a typo'd Drive
+path) or isn't writable.
 
 ## 4. Discover + score
 
@@ -73,7 +74,8 @@ python3 src/scripts/fetch-job-boards.py --source indeed --limit 18
 python3 src/scripts/score-jobs.py --input data/jobs_discovered.json
 ```
 
-Check the [tracker database](https://app.notion.com/p/3e480c2d70db4f2b9b7934c2d8be7d92): rows should appear with `status=SCORED` and a
+Check the tracker file (open `TRACKER_PATH` in Excel/Numbers/Sheets, or
+just `cat` it): rows should appear with `status=SCORED` and a
 `fitScore`. Add more boards with `--source remoteok`, `--source justjoinit`,
 `--source weworkremotely`, each followed by its own `score-jobs.py --input ...`
 call (or point `score-jobs.py` at a merged file). `--source hackernews`
@@ -96,16 +98,16 @@ Stop with `bash stop-automation.sh`.
 
 ## Troubleshooting
 
-- **Notion writes fail with "object_not_found" or 403** — the database
-  isn't shared with your integration yet (step 2 above); sharing is
-  per-integration, so a new integration needs it re-added even if an
-  old one already had access.
+- **Tracker writes fail with "ENOENT" or a permissions error** — the
+  folder in `TRACKER_PATH` doesn't exist yet or isn't writable; create
+  it (Drive Desktop needs the parent folder to already exist and be
+  syncing) or fix the path.
 - **Playwright can't launch Chromium** — run `npx playwright install chromium`.
 - **Dashboard shows "Dashboard server unreachable"** — `dashboard-server.js`
   isn't running; check `logs/dashboard.log`.
 - **Dashboard stuck on "Idle" forever** — `job-processor.js` isn't
   running, or found zero jobs at/above `FIT_THRESHOLD`; check
-  `logs/processor.log` and the tracker database's `Fit Score` column.
+  `logs/processor.log` and the tracker file's `fitScore` column.
 - **Indeed/LinkedIn scraping returns nothing** — session cookie expired;
   get a fresh one (step 2).
 - **`hackernews` source fails to launch a browser** — run `crawl4ai-setup`

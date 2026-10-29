@@ -1,5 +1,5 @@
 """Scores discovered jobs with the Claude API and writes qualifying rows
-(fitScore >= FIT_THRESHOLD) to the Notion tracker database.
+(fitScore >= FIT_THRESHOLD) to the CSV tracker (see TRACKER_PATH in .env).
 
 Usage:
     python score-jobs.py --source indeed --limit 18
@@ -14,7 +14,7 @@ import sys
 import anthropic
 from dotenv import load_dotenv
 
-from notion_client_lib import NotionClient
+from tracker_csv import TrackerClient
 
 load_dotenv()
 
@@ -110,10 +110,7 @@ def main():
     batch_size = int(os.environ.get("CLAUDE_BATCH_SIZE", "10"))
     threshold = int(os.environ.get("FIT_THRESHOLD", "70"))
 
-    tracker = NotionClient(
-        api_key=os.environ.get("NOTION_API_KEY"),
-        data_source_id=os.environ.get("NOTION_DATA_SOURCE_ID"),
-    )
+    tracker = TrackerClient(path=os.environ.get("TRACKER_PATH", "./data/tracker.csv"))
     existing_urls = tracker.existing_urls()
 
     jobs = load_jobs(args, existing_urls)

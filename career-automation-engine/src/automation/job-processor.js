@@ -5,7 +5,7 @@ const { chromium } = require('playwright');
 const config = require('../lib/config');
 const logger = require('../lib/logger');
 const state = require('../lib/state');
-const notion = require('../lib/notion');
+const tracker = require('../lib/tracker');
 const {
   detectATS, fillApplicationForm, detectScreeningQuestions,
   screenshotForReview, screenshotOnError, submitForm, captureConfirmation,
@@ -24,7 +24,7 @@ async function waitForDecision() {
 }
 
 async function processJob(browser, job) {
-  const jobId = job.pageId;
+  const jobId = job.id;
   logger.info(`Loading job ${jobId}: ${job.company} | ${job.role}`);
 
   const page = await browser.newPage();
@@ -32,7 +32,7 @@ async function processJob(browser, job) {
     await page.goto(job.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
   } catch (err) {
     await screenshotOnError(page, config.automation.screenshotDir, jobId, err);
-    await notion.updateJobRow(jobId, { status: 'ERROR', nextAction: `Navigation failed: ${err.message}` });
+    await tracker.updateJobRow(jobId, { status: 'ERROR', nextAction: `Navigation failed: ${err.message}` });
     await page.close();
     return;
   }
@@ -49,7 +49,7 @@ async function processJob(browser, job) {
     logger.info(`${questionCount} screening questions detected on job ${jobId} — screenshot saved for review.`);
   }
 
-  await notion.updateJobRow(jobId, {
+  await tracker.updateJobRow(jobId, {
     status: 'FORM_FILLED',
     formType,
     nextAction: missed.length ? `Review missed fields: ${missed.join(', ')}` : 'Ready for approval',
@@ -58,7 +58,7 @@ async function processJob(browser, job) {
   state.write({
     status: 'FORM_FILLED',
     job: {
-      pageId: jobId, company: job.company, role: job.role, url: job.url,
+      id: jobId, company: job.company, role: job.role, url: job.url,
       fitScore: job.fitScore, formType, filled, missed, questionCount, screenshotPath,
     },
   });
@@ -70,7 +70,7 @@ async function processJob(browser, job) {
     try {
       await submitForm(page);
       const confirmation = await captureConfirmation(page);
-      await notion.updateJobRow(jobId, {
+      await tracker.updateJobRow(jobId, {
         status: 'SUBMITTED',
         submittedDate: new Date().toISOString(),
         confirmationCode: confirmation || '(not captured — verify manually)',
@@ -78,10 +78,10 @@ async function processJob(browser, job) {
       logger.info(`SUBMITTED job ${jobId}${confirmation ? ` — confirmation: ${confirmation}` : ' — no confirmation text found, verify manually'}`);
     } catch (err) {
       await screenshotOnError(page, config.automation.screenshotDir, jobId, err);
-      await notion.updateJobRow(jobId, { status: 'ERROR', nextAction: `Submit failed: ${err.message}` });
+      await tracker.updateJobRow(jobId, { status: 'ERROR', nextAction: `Submit failed: ${err.message}` });
     }
   } else {
-    await notion.updateJobRow(jobId, { status: 'REJECTED' });
+    await tracker.updateJobRow(jobId, { status: 'REJECTED' });
     logger.info(`REJECTED job ${jobId} by Nathan's review.`);
   }
 
@@ -91,7 +91,7 @@ async function processJob(browser, job) {
 
 async function main() {
   logger.info('Loading jobs from tracker...');
-  const jobs = await notion.findJobsByStatus('SCORED', config.claude.fitThreshold);
+  const jobs = await tracker.findJobsByStatus('SCORED', config.claude.fitThreshold);
   logger.info(`Filtering to ${config.claude.fitThreshold}+ score threshold: ${jobs.length} qualified`);
 
   if (jobs.length === 0) {
